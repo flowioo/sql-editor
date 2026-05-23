@@ -200,3 +200,97 @@
   background: rgba(108, 239, 140, 0.1);
   border-radius: 6px;
 }
+
+/* Saved connections */
+.saved-connections {
+  padding: 12px 20px;
+  border-bottom: 1px solid #2e3144;
+}
+
+.saved-header {
+  font-size: 11px;
+  color: #5c6072;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.saved-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+.saved-item:hover {
+  background: #2e3144;
+}
+
+.saved-type {
+  font-size: 10px;
+  font-weight: 600;
+  color: #7c6aef;
+  background: rgba(124, 106, 239, 0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.saved-name {
+  flex: 1;
+  font-size: 13px;
+  color: #e1e4ed;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-name:hover {
+  color: #7c6aef;
+}
+
+.saved-delete {
+  background: none;
+  border: none;
+  color: #5c6072;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.saved-delete:hover {
+  color: #ef6c6c;
+  background: rgba(239, 108, 108, 0.1);
+}
+
+/* Mode tabs */
+.connection-mode-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #2e3144;
+  padding: 0 20px;
+}
+
+.connection-mode-tabs button {
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #5c6072;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.connection-mode-tabs button:hover {
+  color: #e1e4ed;
+}
+
+.connection-mode-tabs button.active {
+  color: #7c6aef;
+  border-bottom-color: #7c6aef;
+}

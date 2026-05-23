@@ -10,6 +10,7 @@ interface SidebarProps {
   readonly schema: DatabaseSchema | null;
   readonly lastRefreshedAt: string | null;
   readonly offline: boolean;
+  readonly descriptions: ReadonlyMap<string, string>;
   readonly history: readonly QueryHistoryEntry[];
   readonly onHistorySelect: (sql: string) => void;
   readonly onClearHistory: () => void;
@@ -25,6 +26,7 @@ export function Sidebar({
   schema,
   lastRefreshedAt,
   offline,
+  descriptions,
   history,
   onHistorySelect,
   onClearHistory,
@@ -62,7 +64,7 @@ export function Sidebar({
                 {offline && <span className="offline-badge">离线</span>}
               </div>
             )}
-            <SchemaTree schema={schema} />
+            <SchemaTree schema={schema} descriptions={descriptions} />
           </>
         )}
 

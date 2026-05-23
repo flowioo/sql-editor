@@ -1,6 +1,7 @@
 use tauri::State;
 use crate::AppState;
 use crate::schema::DatabaseSchema;
+use crate::schema::scanner::{self, ColumnDescription, ScanResult};
 use crate::schema::persist;
 
 #[tauri::command]
@@ -107,4 +108,64 @@ fn schema_changed(cached: &DatabaseSchema, remote: &DatabaseSchema) -> bool {
     }
 
     false
+}
+
+#[tauri::command]
+pub fn scan_codebase(
+    dir_path: String,
+    state: State<'_, AppState>,
+) -> Result<ScanResult, String> {
+    let (key, schema) = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let key = inner
+            .current_connection_key
+            .clone()
+            .ok_or("未连接到数据库".to_string())?;
+        let schema = inner
+            .schema_cache
+            .get(&key)
+            .cloned()
+            .ok_or("请先刷新数据库结构".to_string())?;
+        (key, schema)
+    };
+
+    let table_names: Vec<String> = schema.tables.iter().map(|t| t.name.clone()).collect();
+    let mut result = scanner::scan_directory(&dir_path, &table_names)?;
+
+    persist::save_column_descriptions(
+        &state.cache_db_path,
+        &key,
+        &schema.database_name,
+        &result.descriptions,
+    )?;
+
+    result.descriptions = persist::load_all_column_descriptions(&state.cache_db_path, &key)?;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn get_column_descriptions(
+    table_name: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ColumnDescription>, String> {
+    let (key, schema) = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let key = inner
+            .current_connection_key
+            .clone()
+            .ok_or("未连接到数据库".to_string())?;
+        let schema = inner
+            .schema_cache
+            .get(&key)
+            .cloned();
+        (key, schema)
+    };
+
+    let db_name = schema
+        .as_ref()
+        .map(|s| s.database_name.as_str())
+        .unwrap_or("");
+
+    persist::load_column_descriptions(&state.cache_db_path, &key, db_name, &table_name)
 }

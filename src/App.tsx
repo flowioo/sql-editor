@@ -11,7 +11,9 @@ import { useConnection } from "./hooks/useConnection";
 import { useSchema } from "./hooks/useSchema";
 import { useQuery } from "./hooks/useQuery";
 import { useQueryHistory } from "./hooks/useQueryHistory";
-import { setSchemaRefreshCallback } from "./editor/extensions";
+import { useCodebaseScan } from "./hooks/useCodebaseScan";
+import { useColumnDescriptions } from "./hooks/useColumnDescriptions";
+import { setSchemaRefreshCallback, updateSchemaForAutocomplete } from "./editor/extensions";
 import type { VimMode } from "./hooks/useVimMode";
 import type { ConnectionConfig } from "./types/connection";
 import "./styles/layout.css";
@@ -45,6 +47,12 @@ export default function App() {
     execute: executeQuery,
   } = useQuery();
   const { history, addEntry, clearHistory } = useQueryHistory();
+  const {
+    scanning,
+    scanResult,
+    scanCodebase,
+  } = useCodebaseScan();
+  const { descriptions, loadDescriptions } = useColumnDescriptions();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -60,6 +68,22 @@ export default function App() {
   useEffect(() => {
     setSchemaRefreshCallback(() => refreshSchema);
   }, [refreshSchema]);
+
+  // Push schema to autocomplete when it changes
+  useEffect(() => {
+    if (schema) {
+      updateSchemaForAutocomplete(schema);
+    }
+  }, [schema]);
+
+  // Load column descriptions when schema changes
+  useEffect(() => {
+    if (schema) {
+      for (const table of schema.tables) {
+        loadDescriptions(table.name);
+      }
+    }
+  }, [schema, loadDescriptions]);
 
   const handleContentChange = useCallback(
     (content: string) => {
@@ -109,6 +133,7 @@ export default function App() {
         schema={schema}
         lastRefreshedAt={lastRefreshedAt}
         offline={offline}
+        descriptions={descriptions}
         history={history}
         onHistorySelect={handleHistorySelect}
         onClearHistory={clearHistory}
@@ -119,10 +144,13 @@ export default function App() {
           connectionName={displayName}
           queryLoading={queryLoading}
           schemaLoading={schemaLoading}
+          scanning={scanning}
+          scanResult={scanResult}
           onConnect={() => setShowConnectionDialog(true)}
           onDisconnect={doDisconnect}
           onRun={handleRun}
           onRefreshSchema={refreshSchema}
+          onScanCodebase={scanCodebase}
         />
         <TabBar
           tabs={tabs}

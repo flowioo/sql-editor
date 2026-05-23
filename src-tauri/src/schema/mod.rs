@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod introspect;
 pub mod persist;
+pub mod scanner;
 
 use serde::{Serialize, Deserialize};
 

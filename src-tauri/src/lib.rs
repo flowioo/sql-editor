@@ -54,6 +54,8 @@ pub fn run() {
             commands::schema::refresh_schema,
             commands::schema::get_cached_schema,
             commands::schema::diff_schema,
+            commands::schema::scan_codebase,
+            commands::schema::get_column_descriptions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -25,6 +25,8 @@ import {
   searchKeymap,
   highlightSelectionMatches,
 } from "@codemirror/search";
+import { schemaCompletionSource, setSchema } from "../lib/schema-source";
+import type { DatabaseSchema } from "../hooks/useSchema";
 
 const THEME = EditorView.theme({
   "&": {
@@ -58,12 +60,38 @@ const THEME = EditorView.theme({
   ".cm-line": {
     padding: "0 4px",
   },
+  ".cm-tooltip-autocomplete": {
+    backgroundColor: "#1a1d27",
+    border: "1px solid #2e3144",
+    borderRadius: "6px",
+    "& > ul > li": {
+      padding: "2px 8px",
+    },
+    "& > ul > li[aria-selected]": {
+      backgroundColor: "rgba(124, 106, 239, 0.2)",
+      color: "#e1e4ed",
+    },
+  },
+  ".cm-completionLabel": {
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: "0.85em",
+  },
+  ".cm-completionDetail": {
+    fontStyle: "normal",
+    fontSize: "0.78em",
+    color: "#8b8fa3",
+    marginLeft: "8px",
+  },
 });
 
 let schemaRefreshCallback: (() => void) | null = null;
 
 export function setSchemaRefreshCallback(cb: () => void): void {
   schemaRefreshCallback = cb;
+}
+
+export function updateSchemaForAutocomplete(schema: DatabaseSchema): void {
+  setSchema(schema);
 }
 
 function setupVimLeaderMappings(): void {
@@ -90,7 +118,10 @@ export function createEditorExtensions(): Extension[] {
     sql(),
     vim(),
     oneDark,
-    autocompletion(),
+    autocompletion({
+      override: [schemaCompletionSource],
+      activateOnTyping: true,
+    }),
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,

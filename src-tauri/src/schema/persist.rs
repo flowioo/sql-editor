@@ -1,5 +1,6 @@
 use rusqlite::{Connection, params};
 use crate::schema::DatabaseSchema;
+use crate::schema::scanner::ColumnDescription;
 
 pub fn ensure_cache_db(cache_db_path: &str) -> Result<(), String> {
     let conn = Connection::open(cache_db_path)
@@ -78,4 +79,108 @@ pub fn load_schema(
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(format!("加载缓存失败: {}", e)),
     }
+}
+
+pub fn save_column_descriptions(
+    cache_db_path: &str,
+    connection_key: &str,
+    db_name: &str,
+    descriptions: &[ColumnDescription],
+) -> Result<usize, String> {
+    let conn = Connection::open(cache_db_path)
+        .map_err(|e| format!("无法打开缓存数据库: {}", e))?;
+
+    let mut count = 0usize;
+    for desc in descriptions {
+        conn.execute(
+            "INSERT OR REPLACE INTO column_descriptions \
+             (connection_key, db_name, table_name, column_name, description, source, file_path) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                connection_key,
+                db_name,
+                desc.table_name,
+                desc.column_name,
+                desc.description,
+                desc.source,
+                desc.file_path,
+            ],
+        )
+        .map_err(|e| format!("保存列描述失败: {}", e))?;
+        count += 1;
+    }
+
+    Ok(count)
+}
+
+pub fn load_column_descriptions(
+    cache_db_path: &str,
+    connection_key: &str,
+    db_name: &str,
+    table_name: &str,
+) -> Result<Vec<ColumnDescription>, String> {
+    let conn = Connection::open(cache_db_path)
+        .map_err(|e| format!("无法打开缓存数据库: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT table_name, column_name, description, source, file_path \
+             FROM column_descriptions \
+             WHERE connection_key = ?1 AND db_name = ?2 AND table_name = ?3",
+        )
+        .map_err(|e| format!("查询列描述失败: {}", e))?;
+
+    let rows = stmt
+        .query_map(params![connection_key, db_name, table_name], |row| {
+            Ok(ColumnDescription {
+                table_name: row.get(0)?,
+                column_name: row.get(1)?,
+                description: row.get(2)?,
+                source: row.get(3)?,
+                file_path: row.get(4)?,
+            })
+        })
+        .map_err(|e| format!("读取列描述失败: {}", e))?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| format!("解析列描述失败: {}", e))?);
+    }
+
+    Ok(result)
+}
+
+pub fn load_all_column_descriptions(
+    cache_db_path: &str,
+    connection_key: &str,
+) -> Result<Vec<ColumnDescription>, String> {
+    let conn = Connection::open(cache_db_path)
+        .map_err(|e| format!("无法打开缓存数据库: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT table_name, column_name, description, source, file_path \
+             FROM column_descriptions \
+             WHERE connection_key = ?1",
+        )
+        .map_err(|e| format!("查询列描述失败: {}", e))?;
+
+    let rows = stmt
+        .query_map(params![connection_key], |row| {
+            Ok(ColumnDescription {
+                table_name: row.get(0)?,
+                column_name: row.get(1)?,
+                description: row.get(2)?,
+                source: row.get(3)?,
+                file_path: row.get(4)?,
+            })
+        })
+        .map_err(|e| format!("读取列描述失败: {}", e))?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| format!("解析列描述失败: {}", e))?);
+    }
+
+    Ok(result)
 }

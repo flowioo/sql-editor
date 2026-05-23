@@ -112,6 +112,14 @@
   color: var(--text3);
 }
 
+.toolbar-scan-result {
+  font-size: 0.7em;
+  color: var(--green);
+  background: rgba(74, 222, 128, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
 .query-error {
   display: flex;
   align-items: center;

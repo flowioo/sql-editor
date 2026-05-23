@@ -4,9 +4,10 @@ import "../styles/schema-tree.css";
 
 interface SchemaTreeProps {
   readonly schema: DatabaseSchema | null;
+  readonly descriptions: ReadonlyMap<string, string>;
 }
 
-export function SchemaTree({ schema }: SchemaTreeProps) {
+export function SchemaTree({ schema, descriptions }: SchemaTreeProps) {
   if (!schema) {
     return (
       <div className="sidebar-placeholder">
@@ -25,7 +26,11 @@ export function SchemaTree({ schema }: SchemaTreeProps) {
         </span>
       </div>
       {schema.tables.map((table) => (
-        <TableNode key={table.name} table={table} />
+        <TableNode
+          key={table.name}
+          table={table}
+          descriptions={descriptions}
+        />
       ))}
     </div>
   );
@@ -41,9 +46,10 @@ interface TableNodeProps {
       readonly is_primary_key: boolean;
     }[];
   };
+  readonly descriptions: ReadonlyMap<string, string>;
 }
 
-function TableNode({ table }: TableNodeProps) {
+function TableNode({ table, descriptions }: TableNodeProps) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -63,19 +69,27 @@ function TableNode({ table }: TableNodeProps) {
       </button>
       {expanded && (
         <div className="schema-columns">
-          {table.columns.map((col) => (
-            <div key={col.name} className="schema-column">
-              <span
-                className={`schema-type-badge ${col.is_primary_key ? "pk" : ""}`}
-              >
-                {col.is_primary_key ? "PK" : col.data_type || "ANY"}
-              </span>
-              <span className="schema-column-name">{col.name}</span>
-              {col.nullable && (
-                <span className="schema-nullable">NULL</span>
-              )}
-            </div>
-          ))}
+          {table.columns.map((col) => {
+            const desc = descriptions.get(`${table.name}.${col.name}`);
+            return (
+              <div key={col.name} className="schema-column">
+                <span
+                  className={`schema-type-badge ${col.is_primary_key ? "pk" : ""}`}
+                >
+                  {col.is_primary_key ? "PK" : col.data_type || "ANY"}
+                </span>
+                <span className="schema-column-name">{col.name}</span>
+                {desc && (
+                  <span className="schema-column-desc" title={desc}>
+                    {desc}
+                  </span>
+                )}
+                {col.nullable && (
+                  <span className="schema-nullable">NULL</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 use tauri::Manager;
 use db::DatabaseDriver;
 use schema::cache::SchemaCache;
@@ -7,10 +7,8 @@ mod commands;
 mod db;
 mod schema;
 
-/// Single Mutex protecting all mutable state — eliminates deadlock risk
-/// and ensures atomic state transitions.
 pub struct InnerState {
-    pub driver: Option<Box<dyn DatabaseDriver>>,
+    pub driver: Option<Arc<dyn DatabaseDriver>>,
     pub schema_cache: SchemaCache,
     pub current_connection_key: Option<String>,
 }
@@ -48,12 +46,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::connection::connect,
             commands::connection::connect_sqlite,
             commands::connection::disconnect,
-            commands::connection::test_connection,
+            commands::connection::test_connection_cmd,
             commands::query::execute_query,
             commands::schema::refresh_schema,
             commands::schema::get_cached_schema,
+            commands::schema::diff_schema,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

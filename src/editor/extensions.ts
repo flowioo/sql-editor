@@ -1,13 +1,30 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { sql } from "@codemirror/lang-sql";
-import { vim } from "@replit/codemirror-vim";
+import { vim, Vim } from "@replit/codemirror-vim";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { lineNumbers, highlightActiveLineGutter, highlightActiveLine, keymap, rectangularSelection } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { closeBrackets, closeBracketsKeymap, autocompletion } from "@codemirror/autocomplete";
+import {
+  lineNumbers,
+  highlightActiveLineGutter,
+  highlightActiveLine,
+  keymap,
+  rectangularSelection,
+} from "@codemirror/view";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+} from "@codemirror/commands";
+import {
+  closeBrackets,
+  closeBracketsKeymap,
+  autocompletion,
+} from "@codemirror/autocomplete";
 import { indentOnInput, bracketMatching } from "@codemirror/language";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import {
+  searchKeymap,
+  highlightSelectionMatches,
+} from "@codemirror/search";
 
 const THEME = EditorView.theme({
   "&": {
@@ -43,7 +60,22 @@ const THEME = EditorView.theme({
   },
 });
 
+let schemaRefreshCallback: (() => void) | null = null;
+
+export function setSchemaRefreshCallback(cb: () => void): void {
+  schemaRefreshCallback = cb;
+}
+
+function setupVimLeaderMappings(): void {
+  Vim.map("<leader>rs", "<refresh-schema>", "normal");
+  Vim.handleKey("<refresh-schema>", "", "normal", () => {
+    schemaRefreshCallback?.();
+  });
+}
+
 export function createEditorExtensions(): Extension[] {
+  setupVimLeaderMappings();
+
   return [
     THEME,
     lineNumbers(),

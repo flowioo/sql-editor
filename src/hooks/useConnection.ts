@@ -1,40 +1,39 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import type { ConnectionConfig } from "../types/connection";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
 export interface ConnectionState {
-  readonly path: string | null;
+  readonly config: ConnectionConfig | null;
   readonly displayName: string | null;
   readonly status: ConnectionStatus;
   readonly error: string | null;
 }
 
 export interface UseConnectionReturn extends ConnectionState {
-  readonly connect: (path: string) => Promise<void>;
+  readonly connect: (config: ConnectionConfig) => Promise<void>;
   readonly disconnect: () => Promise<void>;
-  readonly openFile: () => Promise<void>;
+  readonly openSqliteFile: () => Promise<ConnectionConfig | null>;
 }
 
 export function useConnection(): UseConnectionReturn {
   const [state, setState] = useState<ConnectionState>({
-    path: null,
+    config: null,
     displayName: null,
     status: "disconnected",
     error: null,
   });
 
-  const connect = useCallback(async (filePath: string) => {
+  const connect = useCallback(async (config: ConnectionConfig) => {
     setState((prev) => ({ ...prev, status: "connecting", error: null }));
     try {
-      const displayName = await invoke<string>("connect_sqlite", {
-        path: filePath,
-      });
-      setState({ path: filePath, displayName, status: "connected", error: null });
+      const displayName = await invoke<string>("connect", { config });
+      setState({ config, displayName, status: "connected", error: null });
     } catch (e) {
       setState({
-        path: null,
+        config: null,
         displayName: null,
         status: "disconnected",
         error: String(e),
@@ -49,14 +48,14 @@ export function useConnection(): UseConnectionReturn {
       // ignore
     }
     setState({
-      path: null,
+      config: null,
       displayName: null,
       status: "disconnected",
       error: null,
     });
   }, []);
 
-  const openFile = useCallback(async () => {
+  const openSqliteFile = useCallback(async (): Promise<ConnectionConfig | null> => {
     try {
       const selected = await open({
         filters: [
@@ -68,12 +67,13 @@ export function useConnection(): UseConnectionReturn {
         multiple: false,
       });
       if (typeof selected === "string" && selected.length > 0) {
-        await connect(selected);
+        return { type: "sqlite", path: selected };
       }
     } catch {
       // user cancelled or dialog error
     }
-  }, [connect]);
+    return null;
+  }, []);
 
-  return { ...state, connect, disconnect: disconnectFn, openFile };
+  return { ...state, connect, disconnect: disconnectFn, openSqliteFile };
 }

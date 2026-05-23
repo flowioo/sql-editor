@@ -33,13 +33,13 @@ export function Toolbar({
       <button
         className={`btn btn-connect ${connectionStatus}`}
         onClick={connectionStatus === "connected" ? onDisconnect : onConnect}
-        title={connectionStatus === "connected" ? "断开连接" : "打开数据库文件"}
+        title={connectionStatus === "connected" ? "断开连接" : "连接数据库"}
       >
         <span className={`status-dot ${connectionStatus}`} />
         <span>
           {connectionStatus === "connected"
             ? (connectionName ?? "已连接")
-            : "打开数据库"}
+            : "连接"}
         </span>
       </button>
 
@@ -50,8 +50,8 @@ export function Toolbar({
             onClick={onRun}
             disabled={queryLoading}
           >
-            <span>{queryLoading ? "⏳" : "▶"}</span>
-            <span>{queryLoading ? "执行中…" : "运行"}</span>
+            <span>{queryLoading ? "..." : ">"}</span>
+            <span>{queryLoading ? "执行中..." : "运行"}</span>
           </button>
 
           <button
@@ -59,8 +59,8 @@ export function Toolbar({
             onClick={onRefreshSchema}
             disabled={schemaLoading}
           >
-            <span>{schemaLoading ? "⏳" : "↻"}</span>
-            <span>{schemaLoading ? "刷新中…" : "刷新结构"}</span>
+            <span>{schemaLoading ? "..." : "@"}</span>
+            <span>{schemaLoading ? "刷新中..." : "刷新结构"}</span>
           </button>
         </>
       )}

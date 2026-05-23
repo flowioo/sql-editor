@@ -1,12 +1,56 @@
+use std::sync::Arc;
 use tauri::State;
 use crate::AppState;
 use crate::db::sqlite::SqliteDriver;
-use crate::db::DatabaseDriver;
+use crate::db::postgres::PostgresDriver;
+use crate::db::mysql::MySqlDriver;
+use crate::db::{ConnectionConfig, DatabaseDriver};
 use crate::schema::persist;
 
 #[tauri::command]
+pub async fn connect(
+    config: ConnectionConfig,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let conn_key = config.connection_key();
+    let display_name = config.display_name();
+
+    // Create and test driver
+    let driver: Arc<dyn DatabaseDriver> = match &config {
+        ConnectionConfig::Sqlite { path } => {
+            let d = SqliteDriver::new(path)?;
+            d.test_connection()?;
+            Arc::new(d)
+        }
+        ConnectionConfig::Postgresql { host, port, user, password, database } => {
+            let d = PostgresDriver::new(host, *port, user, password, database).await?;
+            d.test_connection()?;
+            Arc::new(d)
+        }
+        ConnectionConfig::Mysql { host, port, user, password, database } => {
+            let d = MySqlDriver::new(host, *port, user, password, database).await?;
+            d.test_connection()?;
+            Arc::new(d)
+        }
+    };
+
+    // Load cached schema from disk
+    let cached_schema = persist::load_schema(&state.cache_db_path, &conn_key)?;
+
+    // Atomic state update
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.driver = Some(driver);
+    inner.current_connection_key = Some(conn_key.clone());
+    if let Some(s) = cached_schema {
+        inner.schema_cache.set(conn_key, s);
+    }
+
+    Ok(display_name)
+}
+
+// Keep connect_sqlite for backward compatibility
+#[tauri::command]
 pub fn connect_sqlite(path: String, state: State<'_, AppState>) -> Result<String, String> {
-    // Create and test driver outside the lock
     let driver = SqliteDriver::new(&path)?;
     driver.test_connection()?;
 
@@ -16,12 +60,10 @@ pub fn connect_sqlite(path: String, state: State<'_, AppState>) -> Result<String
         .to_string_lossy()
         .to_string();
 
-    // Load cached schema from disk (outside the lock — read-only on cache_db)
     let cached_schema = persist::load_schema(&state.cache_db_path, &path)?;
 
-    // Single lock acquisition — atomic state update
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.driver = Some(Box::new(driver));
+    inner.driver = Some(std::sync::Arc::new(driver));
     inner.current_connection_key = Some(path.clone());
     if let Some(s) = cached_schema {
         inner.schema_cache.set(path, s);
@@ -40,7 +82,19 @@ pub fn disconnect(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn test_connection(path: String) -> Result<(), String> {
-    let driver = SqliteDriver::new(&path)?;
-    driver.test_connection()
+pub async fn test_connection_cmd(config: ConnectionConfig) -> Result<(), String> {
+    match &config {
+        ConnectionConfig::Sqlite { path } => {
+            let driver = SqliteDriver::new(path)?;
+            driver.test_connection()
+        }
+        ConnectionConfig::Postgresql { host, port, user, password, database } => {
+            let driver = PostgresDriver::new(host, *port, user, password, database).await?;
+            driver.test_connection()
+        }
+        ConnectionConfig::Mysql { host, port, user, password, database } => {
+            let driver = MySqlDriver::new(host, *port, user, password, database).await?;
+            driver.test_connection()
+        }
+    }
 }

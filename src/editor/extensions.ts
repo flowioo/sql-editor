@@ -94,16 +94,18 @@ export function updateSchemaForAutocomplete(schema: DatabaseSchema): void {
   setSchema(schema);
 }
 
-function setupVimLeaderMappings(): void {
-  Vim.map("<leader>rs", "<refresh-schema>", "normal");
-  Vim.handleKey("<refresh-schema>", "", "normal", () => {
-    schemaRefreshCallback?.();
-  });
+export function setupVimLeaderMappings(view: EditorView): void {
+  try {
+    Vim.map("<leader>rs", "<refresh-schema>", "normal");
+    Vim.handleKey("<refresh-schema>", "", "normal", () => {
+      schemaRefreshCallback?.();
+    });
+  } catch {
+    // vim extension may not be ready yet, safe to ignore
+  }
 }
 
 export function createEditorExtensions(): Extension[] {
-  setupVimLeaderMappings();
-
   return [
     THEME,
     lineNumbers(),

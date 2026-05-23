@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
-import { createEditorExtensions } from "./extensions";
+import { createEditorExtensions, setupVimLeaderMappings } from "./extensions";
 import type { VimMode } from "../hooks/useVimMode";
 import { useVimMode } from "../hooks/useVimMode";
 import "../styles/editor.css";
@@ -101,6 +101,7 @@ export function SQLEditor({
     viewRef.current = view;
     updateCursor(view);
     updateVimMode(view);
+    setupVimLeaderMappings(view);
 
     return () => {
       view.destroy();

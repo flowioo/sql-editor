@@ -1,0 +1,126 @@
+.schema-tree {
+  padding: 4px 0;
+}
+
+.schema-db-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.schema-db-icon {
+  color: var(--green);
+  font-size: 1em;
+}
+
+.schema-db-name {
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
+.schema-table-count {
+  font-size: 0.7em;
+  color: var(--text3);
+  margin-left: auto;
+}
+
+.schema-table {
+  /* container */
+}
+
+.schema-table-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 5px 16px;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 0.8em;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.schema-table-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.schema-arrow {
+  color: var(--text3);
+  font-size: 0.7em;
+  transition: transform 0.15s;
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.schema-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.schema-table-icon {
+  color: var(--accent);
+  font-size: 0.85em;
+}
+
+.schema-table-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.schema-column-count {
+  font-size: 0.7em;
+  color: var(--text3);
+  background: var(--surface2);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.schema-columns {
+  padding-left: 16px;
+}
+
+.schema-column {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 12px;
+  font-size: 0.75em;
+}
+
+.schema-column:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.schema-type-badge {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-family: var(--mono);
+  background: var(--surface2);
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.schema-type-badge.pk {
+  background: rgba(124, 106, 239, 0.15);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.schema-column-name {
+  color: var(--text);
+  font-family: var(--mono);
+}
+
+.schema-nullable {
+  font-size: 0.8em;
+  color: var(--text3);
+  opacity: 0.6;
+}

@@ -9,28 +9,6 @@
   flex-shrink: 0;
 }
 
-.conn-select {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 4px 28px 4px 10px;
-  font-size: 0.8em;
-  font-family: var(--sans);
-  -webkit-appearance: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='%238b8fa3'%3E%3Cpath d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  cursor: pointer;
-  max-width: 200px;
-  outline: none;
-}
-
-.conn-select:focus {
-  border-color: var(--accent);
-}
-
 .toolbar .btn {
   display: flex;
   align-items: center;
@@ -48,6 +26,50 @@
 
 .toolbar .btn:active {
   transform: scale(0.97);
+}
+
+.toolbar .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-connect {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border) !important;
+}
+
+.btn-connect:hover {
+  background: var(--surface3);
+}
+
+.btn-connect.connected {
+  border-color: var(--green) !important;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.disconnected {
+  background: var(--text3);
+}
+
+.status-dot.connecting {
+  background: var(--yellow);
+  animation: pulse 1s infinite;
+}
+
+.status-dot.connected {
+  background: var(--green);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .btn-run {
@@ -83,4 +105,26 @@
 
 .toolbar .spacer {
   flex: 1;
+}
+
+.toolbar-status {
+  font-size: 0.72em;
+  color: var(--text3);
+}
+
+.query-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(248, 113, 113, 0.08);
+  border-top: 1px solid rgba(248, 113, 113, 0.2);
+  color: var(--red);
+  font-size: 0.8em;
+  font-family: var(--mono);
+}
+
+.error-icon {
+  font-weight: 700;
+  flex-shrink: 0;
 }

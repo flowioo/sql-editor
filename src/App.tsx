@@ -1,19 +1,35 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { TabBar } from "./components/TabBar";
 import { SQLEditor } from "./editor/SQLEditor";
 import { StatusBar } from "./components/StatusBar";
+import { ResultGrid } from "./components/ResultGrid";
 import { useTabStore } from "./hooks/useTabStore";
+import { useConnection } from "./hooks/useConnection";
+import { useSchema } from "./hooks/useSchema";
+import { useQuery } from "./hooks/useQuery";
 import type { VimMode } from "./hooks/useVimMode";
 import "./styles/layout.css";
 
 export default function App() {
-  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent } = useTabStore();
+  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent } =
+    useTabStore();
   const [vimMode, setVimMode] = useState<VimMode>("normal");
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
 
+  const { status: connStatus, displayName, openFile, disconnect: doDisconnect } = useConnection();
+  const { schema, loading: schemaLoading, loadFromCache, refresh: refreshSchema } = useSchema();
+  const { result, loading: queryLoading, error: queryError, execute: executeQuery } = useQuery();
+
   const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  // Auto-load schema when connected
+  useEffect(() => {
+    if (connStatus === "connected") {
+      loadFromCache();
+    }
+  }, [connStatus, loadFromCache]);
 
   const handleContentChange = useCallback(
     (content: string) => {
@@ -25,18 +41,27 @@ export default function App() {
   );
 
   const handleRun = useCallback(() => {
-    // placeholder — will connect to Tauri backend in M2
-  }, []);
-
-  const handleSave = useCallback(() => {
-    // placeholder — will connect to filesystem in M2
-  }, []);
+    if (connStatus !== "connected") return;
+    const sql = activeTab?.content;
+    if (sql) {
+      executeQuery(sql);
+    }
+  }, [connStatus, activeTab?.content, executeQuery]);
 
   return (
     <div className="app">
-      <Sidebar />
+      <Sidebar schema={schema} />
       <div className="editor-area">
-        <Toolbar onRun={handleRun} onSave={handleSave} />
+        <Toolbar
+          connectionStatus={connStatus}
+          connectionName={displayName}
+          queryLoading={queryLoading}
+          schemaLoading={schemaLoading}
+          onConnect={openFile}
+          onDisconnect={doDisconnect}
+          onRun={handleRun}
+          onRefreshSchema={refreshSchema}
+        />
         <TabBar
           tabs={tabs}
           activeTabId={activeTabId}
@@ -51,10 +76,25 @@ export default function App() {
             onContentChange={handleContentChange}
             onVimModeChange={setVimMode}
             onCursorChange={(line, col) => setCursorPos({ line, col })}
+            onRun={handleRun}
           />
         )}
+
+        {queryError && (
+          <div className="query-error">
+            <span className="error-icon">✗</span>
+            <span>{queryError}</span>
+          </div>
+        )}
+
+        {result && <ResultGrid result={result} />}
+
         <div style={{ flex: 1 }} />
-        <StatusBar vimMode={vimMode} cursorLine={cursorPos.line} cursorCol={cursorPos.col} />
+        <StatusBar
+          vimMode={vimMode}
+          cursorLine={cursorPos.line}
+          cursorCol={cursorPos.col}
+        />
       </div>
     </div>
   );

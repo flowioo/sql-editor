@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
+import { keymap } from "@codemirror/view";
 import { createEditorExtensions } from "./extensions";
 import type { VimMode } from "../hooks/useVimMode";
 import { useVimMode } from "../hooks/useVimMode";
@@ -11,6 +12,7 @@ interface SQLEditorProps {
   readonly onContentChange?: (content: string) => void;
   readonly onVimModeChange?: (mode: VimMode) => void;
   readonly onCursorChange?: (line: number, col: number) => void;
+  readonly onRun?: () => void;
 }
 
 function getVimModeFromView(view: EditorView): VimMode {
@@ -32,12 +34,16 @@ export function SQLEditor({
   onContentChange,
   onVimModeChange,
   onCursorChange,
+  onRun,
 }: SQLEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const { getVimModeLabel, getVimModeClass } = useVimMode();
   const [vimMode, setVimMode] = useState<VimMode>("normal");
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+
+  const onRunRef = useRef(onRun);
+  onRunRef.current = onRun;
 
   const updateVimMode = useCallback(
     (view: EditorView) => {
@@ -62,6 +68,16 @@ export function SQLEditor({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const runKeymap = keymap.of([
+      {
+        key: "Ctrl-Enter",
+        run: () => {
+          onRunRef.current?.();
+          return true;
+        },
+      },
+    ]);
+
     const onUpdate = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         onContentChange?.(update.state.doc.toString());
@@ -74,7 +90,7 @@ export function SQLEditor({
 
     const state = EditorState.create({
       doc: initialContent,
-      extensions: [...createEditorExtensions(), onUpdate],
+      extensions: [...createEditorExtensions(), runKeymap, onUpdate],
     });
 
     const view = new EditorView({

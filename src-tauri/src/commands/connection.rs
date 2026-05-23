@@ -24,12 +24,10 @@ pub async fn connect(
         }
         ConnectionConfig::Postgresql { host, port, user, password, database } => {
             let d = PostgresDriver::new(host, *port, user, password, database).await?;
-            d.test_connection()?;
             Arc::new(d)
         }
         ConnectionConfig::Mysql { host, port, user, password, database } => {
             let d = MySqlDriver::new(host, *port, user, password, database).await?;
-            d.test_connection()?;
             Arc::new(d)
         }
     };
@@ -89,12 +87,12 @@ pub async fn test_connection_cmd(config: ConnectionConfig) -> Result<(), String>
             driver.test_connection()
         }
         ConnectionConfig::Postgresql { host, port, user, password, database } => {
-            let driver = PostgresDriver::new(host, *port, user, password, database).await?;
-            driver.test_connection()
+            PostgresDriver::new(host, *port, user, password, database).await?;
+            Ok(())
         }
         ConnectionConfig::Mysql { host, port, user, password, database } => {
-            let driver = MySqlDriver::new(host, *port, user, password, database).await?;
-            driver.test_connection()
+            MySqlDriver::new(host, *port, user, password, database).await?;
+            Ok(())
         }
     }
 }

@@ -23,6 +23,8 @@ pub enum ConnectionConfig {
         user: String,
         password: String,
         database: String,
+        #[serde(default)]
+        url: Option<String>,
     },
     Mysql {
         host: String,
@@ -30,6 +32,8 @@ pub enum ConnectionConfig {
         user: String,
         password: String,
         database: String,
+        #[serde(default)]
+        url: Option<String>,
     },
 }
 

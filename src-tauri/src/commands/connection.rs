@@ -22,12 +22,12 @@ pub async fn connect(
             d.test_connection()?;
             Arc::new(d)
         }
-        ConnectionConfig::Postgresql { host, port, user, password, database } => {
-            let d = PostgresDriver::new(host, *port, user, password, database).await?;
+        ConnectionConfig::Postgresql { host, port, user, password, database, url } => {
+            let d = PostgresDriver::new(host, *port, user, password, database, url.as_deref()).await?;
             Arc::new(d)
         }
-        ConnectionConfig::Mysql { host, port, user, password, database } => {
-            let d = MySqlDriver::new(host, *port, user, password, database).await?;
+        ConnectionConfig::Mysql { host, port, user, password, database, url } => {
+            let d = MySqlDriver::new(host, *port, user, password, database, url.as_deref()).await?;
             Arc::new(d)
         }
     };
@@ -86,12 +86,12 @@ pub async fn test_connection_cmd(config: ConnectionConfig) -> Result<(), String>
             let driver = SqliteDriver::new(path)?;
             driver.test_connection()
         }
-        ConnectionConfig::Postgresql { host, port, user, password, database } => {
-            PostgresDriver::new(host, *port, user, password, database).await?;
+        ConnectionConfig::Postgresql { host, port, user, password, database, url } => {
+            PostgresDriver::new(host, *port, user, password, database, url.as_deref()).await?;
             Ok(())
         }
-        ConnectionConfig::Mysql { host, port, user, password, database } => {
-            MySqlDriver::new(host, *port, user, password, database).await?;
+        ConnectionConfig::Mysql { host, port, user, password, database, url } => {
+            MySqlDriver::new(host, *port, user, password, database, url.as_deref()).await?;
             Ok(())
         }
     }

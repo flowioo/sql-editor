@@ -19,12 +19,12 @@ impl MySqlDriver {
         user: &str,
         password: &str,
         database: &str,
+        url: Option<&str>,
     ) -> Result<Self, String> {
-        let url = format!(
-            "mysql://{}:{}@{}:{}/{}",
-            user, password, host, port, database
-        );
-        let pool = MySqlPool::connect(&url)
+        let connection_url = url.map(|s| s.to_string()).unwrap_or_else(|| {
+            format!("mysql://{}:{}@{}:{}/{}", user, password, host, port, database)
+        });
+        let pool = MySqlPool::connect(&connection_url)
             .await
             .map_err(|e| format!("无法连接 MySQL: {}", e))?;
 

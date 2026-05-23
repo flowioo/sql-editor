@@ -12,6 +12,7 @@ export interface PostgresqlConfig {
   readonly user: string;
   readonly password: string;
   readonly database: string;
+  readonly url?: string;
 }
 
 export interface MysqlConfig {
@@ -21,6 +22,7 @@ export interface MysqlConfig {
   readonly user: string;
   readonly password: string;
   readonly database: string;
+  readonly url?: string;
 }
 
 export type ConnectionConfig = SqliteConfig | PostgresqlConfig | MysqlConfig;

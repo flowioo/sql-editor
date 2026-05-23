@@ -19,12 +19,12 @@ impl PostgresDriver {
         user: &str,
         password: &str,
         database: &str,
+        url: Option<&str>,
     ) -> Result<Self, String> {
-        let url = format!(
-            "postgres://{}:{}@{}:{}/{}",
-            user, password, host, port, database
-        );
-        let pool = PgPool::connect(&url)
+        let connection_url = url.map(|s| s.to_string()).unwrap_or_else(|| {
+            format!("postgres://{}:{}@{}:{}/{}", user, password, host, port, database)
+        });
+        let pool = PgPool::connect(&connection_url)
             .await
             .map_err(|e| format!("无法连接 PostgreSQL: {}", e))?;
 

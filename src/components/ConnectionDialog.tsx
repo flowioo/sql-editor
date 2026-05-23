@@ -54,6 +54,7 @@ function parseDatabaseUrl(url: string): ConnectionConfig | null {
       user: decodeURIComponent(u.username || ""),
       password,
       database,
+      url,  // pass raw URL to preserve sslmode etc.
     };
   } catch {
     return null;
@@ -137,7 +138,7 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
       return;
     }
     setUrlError("");
-    // Auto-save
+    // Auto-save — config is guaranteed PG or MySQL from parseDatabaseUrl
     const id = `${config.type}://${config.user}@${config.host}:${config.port}/${config.database}`;
     const name = `${config.database} (${config.host})`;
     saveConnection({ id, name, config });

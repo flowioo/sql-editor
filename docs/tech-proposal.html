@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL Query Editor — Technical Proposal</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --border: #2e3144;
+    --text: #e1e4ed;
+    --text2: #8b8fa3;
+    --accent: #7c6aef;
+    --accent2: #5b4cc4;
+    --green: #4ade80;
+    --blue: #60a5fa;
+    --orange: #fb923c;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    --sans: -apple-system, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 60px 0 50px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 50px;
+  }
+  .header h1 {
+    font-size: 2.4em;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent), var(--blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+  .header .subtitle {
+    font-size: 1.1em;
+    color: var(--text2);
+  }
+  .header .meta {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    color: var(--text2);
+    font-size: 0.9em;
+  }
+  .header .meta span { display: flex; align-items: center; gap: 6px; }
+
+  /* Sections */
+  section {
+    margin-bottom: 50px;
+  }
+  h2 {
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--accent);
+    display: inline-block;
+  }
+  h3 {
+    font-size: 1.15em;
+    font-weight: 600;
+    color: var(--blue);
+    margin: 24px 0 12px;
+  }
+  h4 {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--text);
+    margin: 16px 0 8px;
+  }
+  p {
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  /* Architecture Diagram */
+  .arch-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 30px;
+    margin: 20px 0;
+  }
+  .arch-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .arch-layer {
+    border-radius: 8px;
+    padding: 18px 24px;
+    position: relative;
+  }
+  .arch-layer h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.95em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .layer-ui {
+    background: linear-gradient(135deg, rgba(96,165,250,0.12), rgba(96,165,250,0.05));
+    border: 1px solid rgba(96,165,250,0.2);
+  }
+  .layer-ui h4 { color: var(--blue); }
+  .layer-bridge {
+    background: linear-gradient(135deg, rgba(124,106,239,0.12), rgba(124,106,239,0.05));
+    border: 1px solid rgba(124,106,239,0.2);
+    text-align: center;
+    padding: 12px;
+  }
+  .layer-bridge h4 { color: var(--accent); margin: 0; }
+  .layer-rust {
+    background: linear-gradient(135deg, rgba(251,146,60,0.12), rgba(251,146,60,0.05));
+    border: 1px solid rgba(251,146,60,0.2);
+  }
+  .layer-rust h4 { color: var(--orange); }
+
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .module-tag {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85em;
+    text-align: center;
+    font-family: var(--mono);
+    color: var(--text2);
+  }
+
+  /* Feature cards */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .feature-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 1em;
+  }
+  .feature-card p {
+    font-size: 0.9em;
+    color: var(--text2);
+    margin: 0;
+  }
+  .feature-icon {
+    font-size: 1.5em;
+    margin-bottom: 8px;
+  }
+
+  /* Code blocks */
+  pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    line-height: 1.6;
+    margin: 12px 0;
+  }
+  code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+  }
+  .inline-code {
+    background: var(--surface2);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    color: var(--green);
+  }
+
+  /* Tech stack table */
+  .stack-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 20px 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .stack-table th, .stack-table td {
+    padding: 12px 18px;
+    text-align: left;
+  }
+  .stack-table th {
+    background: var(--surface2);
+    font-weight: 600;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+  }
+  .stack-table td {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 0.92em;
+  }
+  .stack-table code {
+    color: var(--green);
+  }
+
+  /* Data flow */
+  .flow-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    align-items: center;
+    margin: 20px 0;
+    justify-content: center;
+  }
+  .flow-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    text-align: center;
+    min-width: 120px;
+  }
+  .flow-step .label {
+    font-size: 0.8em;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+  .flow-step .value {
+    font-family: var(--mono);
+    font-size: 0.9em;
+    font-weight: 600;
+  }
+  .flow-arrow {
+    color: var(--accent);
+    font-size: 1.3em;
+    padding: 0 6px;
+  }
+
+  /* Milestones */
+  .milestone-list {
+    list-style: none;
+    margin: 16px 0;
+    padding: 0;
+  }
+  .milestone-list li {
+    padding: 12px 16px;
+    border-left: 3px solid var(--accent);
+    margin-bottom: 12px;
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+  }
+  .milestone-list li strong {
+    color: var(--accent);
+  }
+  .milestone-list li .desc {
+    font-size: 0.9em;
+    color: var(--text2);
+    margin-top: 4px;
+  }
+
+  /* Badge */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+    font-family: var(--mono);
+  }
+  .badge-rust { background: rgba(251,146,60,0.15); color: var(--orange); }
+  .badge-ts { background: rgba(96,165,250,0.15); color: var(--blue); }
+  .badge-db { background: rgba(74,222,128,0.15); color: var(--green); }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 40px 0 20px;
+    border-top: 1px solid var(--border);
+    margin-top: 60px;
+    color: var(--text2);
+    font-size: 0.85em;
+  }
+
+  @media (max-width: 640px) {
+    .feature-grid { grid-template-columns: 1fr; }
+    .flow-steps { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+    .header h1 { font-size: 1.8em; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header class="header">
+    <h1>SQL Query Editor</h1>
+    <p class="subtitle">Tauri + CodeMirror 6 Technical Proposal</p>
+    <div class="meta">
+      <span>📅 2026-05</span>
+      <span>📌 v0.2.0</span>
+      <span>🎯 Desktop App</span>
+    </div>
+  </header>
+
+  <!-- 1. Overview -->
+  <section>
+    <h2>1. Overview</h2>
+    <p>A lightweight, fast SQL query editor with native vim editing mode. Built on <span class="inline-code">Tauri v2</span> (Rust backend) + <span class="inline-code">CodeMirror 6</span> (JS frontend), targeting ~10MB binary size — 20x lighter than Electron-based alternatives.</p>
+    <p>Core differentiator: <strong>vim-native editing + multi-database support + zero-latency local connections</strong>.</p>
+  </section>
+
+  <!-- 2. Architecture -->
+  <section>
+    <h2>2. Architecture</h2>
+    <div class="arch-box">
+      <div class="arch-layers">
+        <!-- UI Layer -->
+        <div class="arch-layer layer-ui">
+          <h4>🖥 Frontend (TypeScript / CodeMirror 6)</h4>
+          <div class="module-grid">
+            <div class="module-tag">SQL Editor<br>@codemirror/lang-sql</div>
+            <div class="module-tag">Vim Mode<br>@codemirror/vim</div>
+            <div class="module-tag">Autocomplete<br>schema-aware</div>
+            <div class="module-tag">Result Grid<br>AG Grid / canvas-virt</div>
+            <div class="module-tag">Connection Panel<br>sidebar UI</div>
+            <div class="module-tag">History<br>query log</div>
+          </div>
+        </div>
+
+        <!-- Bridge -->
+        <div class="arch-layer layer-bridge">
+          <h4>🔗 IPC Bridge — tauri::invoke / Events</h4>
+        </div>
+
+        <!-- Rust Layer -->
+        <div class="arch-layer layer-rust">
+          <h4>⚙ Backend (Rust / Tauri v2)</h4>
+          <div class="module-grid">
+            <div class="module-tag">Connection Mgr<br>sqlx + pool</div>
+            <div class="module-tag">Query Engine<br>execute + stream</div>
+            <div class="module-tag">Schema Cache<br>information_schema</div>
+            <div class="module-tag">SSH Tunnel<br>russh</div>
+            <div class="module-tag">Credential Store<br>OS keychain</div>
+            <div class="module-tag">Export<br>CSV / JSON</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Tech Stack -->
+  <section>
+    <h2>3. Tech Stack</h2>
+    <table class="stack-table">
+      <thead>
+        <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-rust">Rust</span></td>
+          <td><code>tauri v2</code></td>
+          <td>Native window, IPC, filesystem</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-rust">Rust</span></td>
+          <td><code>sqlx</code> / <code>rusqlite</code></td>
+          <td>Async DB drivers (PG, MySQL, SQLite)</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-rust">Rust</span></td>
+          <td><code>russh</code></td>
+          <td>SSH tunnel for remote DB access</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-ts">TS</span></td>
+          <td><code>CodeMirror 6</code></td>
+          <td>Editor core + extensions</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-ts">TS</span></td>
+          <td><code>@codemirror/vim</code></td>
+          <td>Vim modal editing</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-ts">TS</span></td>
+          <td><code>@codemirror/lang-sql</code></td>
+          <td>SQL syntax + autocomplete</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-ts">TS</span></td>
+          <td><code>ag-grid</code> or <code>tanstack-virtual</code></td>
+          <td>Result grid (10k+ rows)</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-rust">Rust</span></td>
+          <td><code>tree-sitter</code></td>
+          <td>Codebase model parser (Go/TS/Prisma)</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-rust">Rust</span></td>
+          <td><code>reqwest</code></td>
+          <td>HTTP client for CCR proxy calls</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-db">DB</span></td>
+          <td><code>PostgreSQL</code> / <code>MySQL</code> / <code>SQLite</code></td>
+          <td>v1 supported databases</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 4. Core Features -->
+  <section>
+    <h2>4. Core Features</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⌨️</div>
+        <h4>Vim Editing Mode</h4>
+        <p>Normal / Insert / Visual modes. Motions, operators, text objects, macros, marks, registers.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗄️</div>
+        <h4>Multi-DB Support</h4>
+        <p>PostgreSQL, MySQL, SQLite in v1. ClickHouse, MongoDB as plugins.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h4>Schema Autocomplete</h4>
+        <p>Table names, columns, functions — context-aware completion from live schema cache.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h4>Result Grid</h4>
+        <p>Virtual-scrolled grid for 100k+ rows. Sort, filter, copy-as-CSV, export.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔐</div>
+        <h4>SSH Tunnel</h4>
+        <p>Jump-host / bastion support via <code>russh</code>. No external SSH client needed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h4>Query History</h4>
+        <p>Searchable history with timestamps, DB context, execution time.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🪟</div>
+        <h4>Split Tabs</h4>
+        <p>Multiple query tabs, horizontal/vertical split panes. Session restore.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💾</div>
+        <h4>Saved Connections</h4>
+        <p>Encrypted credential store via OS keychain (macOS Keychain / libsecret).</p>
+      </div>
+      <div class="feature-card" style="border-color: var(--accent); background: linear-gradient(135deg, rgba(124,106,239,0.08), var(--surface));">
+        <div class="feature-icon">📦</div>
+        <h4>Local Schema Cache</h4>
+        <p>Persist schema to local SQLite. Instant load on reconnect. Manual refresh button. Works offline for schema browsing.</p>
+      </div>
+      <div class="feature-card" style="border-color: var(--accent); background: linear-gradient(135deg, rgba(124,106,239,0.08), var(--surface))">
+        <div class="feature-icon">🔗</div>
+        <h4>Code-Linked Descriptions</h4>
+        <p>Parse codebase models (Go struct, TS interface, Java Entity, Prisma) → auto-annotate schema columns with business context in autocomplete.</p>
+      </div>
+      <div class="feature-card" style="border-color: var(--accent); background: linear-gradient(135deg, rgba(124,106,239,0.08), var(--surface))">
+        <div class="feature-icon">🤖</div>
+        <h4>AI SQL Generation</h4>
+        <p>NL → SQL via local CCR proxy. Inject schema context + descriptions into prompt. Generated SQL inserts directly into editor.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Data Flow -->
+  <section>
+    <h2>5. Data Flow — Query Execution</h2>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="label">1. User Input</div>
+        <div class="value">vim keys → CM6</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">2. IPC Call</div>
+        <div class="value">invoke("exec_sql")</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">3. Rust Handler</div>
+        <div class="value">sqlx::query(sql)</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">4. Stream Rows</div>
+        <div class="value">events → WebView</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">5. Render Grid</div>
+        <div class="value">virtual scroll</div>
+      </div>
+    </div>
+
+    <h3>Schema Introspection Flow</h3>
+    <pre>On connect:
+  Rust → SELECT * FROM information_schema.tables WHERE table_schema = 'public'
+  Rust → SELECT * FROM information_schema.columns WHERE ...
+  Rust → Serialize → <span style="color:#60a5fa">tauri::emit</span>("schema_update", SchemaPayload)
+
+Frontend receives:
+  JS → schema = event.payload
+  JS → <span style="color:#60a5fa">SQLSchema</span>.register(schema)  // feeds into CodeMirror autocomplete source
+  JS → Sidebar.render_tree(schema)  // tree view: database → table → column</pre>
+  </section>
+
+  <!-- 6. Project Structure -->
+  <section>
+    <h2>6. Project Structure</h2>
+<pre>sql-editor/
+├── src-tauri/                  <span style="color:#fb923c"># Rust backend</span>
+│   ├── src/
+│   │   ├── main.rs
+│   │   ├── db/
+│   │   │   ├── mod.rs
+│   │   │   ├── pool.rs          <span style="color:#fb923c"># connection pool manager</span>
+│   │   │   ├── postgres.rs
+│   │   │   ├── mysql.rs
+│   │   │   └── sqlite.rs
+│   │   ├── tunnel/
+│   │   │   └── ssh.rs           <span style="color:#fb923c"># russh tunnel</span>
+│   │   ├── schema/
+│   │   │   ├── introspect.rs    <span style="color:#fb923c"># information_schema queries</span>
+│   │   │   ├── cache.rs         <span style="color:#fb923c"># in-memory schema cache</span>
+│   │   │   ├── persist.rs       <span style="color:#fb923c"># local SQLite schema cache</span>
+│   │   │   └── scanner.rs       <span style="color:#fb923c"># codebase model → description</span>
+│   │   ├── commands/
+│   │   │   ├── query.rs         <span style="color:#fb923c"># execute, explain, cancel</span>
+│   │   │   ├── connection.rs    <span style="color:#fb923c"># connect, disconnect, test</span>
+│   │   │   ├── export.rs        <span style="color:#fb923c"># CSV, JSON export</span>
+│   │   │   └── ai.rs            <span style="color:#fb923c"># NL→SQL via CCR proxy</span>
+│   │   └── crypto/
+│   │       └── keychain.rs      <span style="color:#fb923c"># OS credential store</span>
+│   └── Cargo.toml
+│
+├── src/                         <span style="color:#60a5fa"># Frontend (TypeScript)</span>
+│   ├── App.tsx
+│   ├── editor/
+│   │   ├── SQLEditor.tsx        <span style="color:#60a5fa"># CodeMirror setup + vim</span>
+│   │   ├── extensions.ts        <span style="color:#60a5fa"># CM6 extensions config</span>
+│   │   └── keymap.ts            <span style="color:#60a5fa"># Custom keybindings</span>
+│   ├── result/
+│   │   ├── ResultGrid.tsx       <span style="color:#60a5fa"># Virtual-scrolled result</span>
+│   │   └── ExportMenu.tsx
+│   ├── sidebar/
+│   │   ├── ConnectionList.tsx
+│   │   ├── SchemaTree.tsx       <span style="color:#60a5fa"># database → table → column</span>
+│   │   └── HistoryPanel.tsx
+│   ├── hooks/
+│   │   ├── useConnection.ts
+│   │   ├── useSchema.ts
+│   │   └── useQuery.ts
+│   ├── lib/
+│       ├── schema-source.ts     <span style="color:#60a5fa"># CM6 autocomplete from schema</span>
+│       ├── tauri-bridge.ts      <span style="color:#60a5fa"># typed invoke wrappers</span>
+│       └── ccr-client.ts        <span style="color:#60a5fa"># CCR proxy HTTP client</span>
+│   ├── ai/
+│   │   ├── AIPanel.tsx          <span style="color:#60a5fa"># NL input → SQL output panel</span>
+│   │   └── prompt-builder.ts    <span style="color:#60a5fa"># schema → prompt construction</span>
+│
+├── package.json
+└── tauri.conf.json</pre>
+  </section>
+
+  <!-- 7. Key Technical Decisions -->
+  <section>
+    <h2>7. Key Technical Decisions</h2>
+
+    <h3>7.1 Why CodeMirror 6 over Monaco?</h3>
+    <ul style="padding-left:20px; margin:10px 0;">
+      <li>CM6 is modular — bundle only what you need (~50KB vs Monaco ~4MB)</li>
+      <li>First-class vim mode extension</li>
+      <li>Better performance for large documents</li>
+      <li>Monaco requires web workers; harder in Tauri WebView</li>
+    </ul>
+
+    <h3>7.2 Result Grid Strategy</h3>
+    <p>For 100k+ row results, use <span class="inline-code">@tanstack/virtual</span> with a custom canvas renderer. AG Grid Community is heavier but provides sorting/filtering out of the box. Start with AG Grid, optimize later.</p>
+
+    <h3>7.3 Streaming Large Results</h3>
+    <pre>// Rust: stream rows via Tauri events instead of collecting all
+async fn execute_query(sql: &str, conn_id: &str) -> Result&lt;()&gt; {
+    let mut stream = sqlx::query(sql).fetch(&amp;pool);
+    let mut batch = Vec::with_capacity(1000);
+    while let Some(row) = stream.next().await {
+        batch.push(row_to_json(row?));
+        if batch.len() == 1000 {
+            app_handle.emit("query_rows", &amp;batch)?;
+            batch.clear();
+        }
+    }
+    app_handle.emit("query_done", batch.len())?;  // final batch + done signal
+}</pre>
+
+    <h3>7.4 Schema Autocomplete Architecture</h3>
+    <pre>// Frontend: register schema as CodeMirror completion source
+function schemaCompletionSource(context: CompletionContext) {
+  const word = context.matchBefore(/[\w.]+/);
+  if (!word) return null;
+
+  const text = word.text.toLowerCase();
+  const options: Completion[] = [];
+
+  // "SELECT ... FROM <span style="color:#4ade80">ta|</span>" → complete table names
+  if (isAfterFrom(context)) {
+    schema.tables
+      .filter(t => t.name.startsWith(text))
+      .forEach(t => options.push({
+        label: t.name,
+        type: "table",
+        detail: t.description,        // <span style="color:#7c6aef">from code annotations</span>
+        info: t.model_location         // <span style="color:#7c6aef">e.g. "internal/model/user.go:15"</span>
+      }));
+  }
+
+  // "SELECT <span style="color:#4ade80">col|</span>" → complete column names
+  if (isSelectClause(context)) {
+    schema.tables.flatMap(t => t.columns)
+      .filter(c => c.name.startsWith(text))
+      .forEach(c => options.push({
+        label: c.name,
+        type: "property",
+        detail: c.description,         // <span style="color:#7c6aef">"用户手机号" from Go struct tag</span>
+        info: c.business_context       // <span style="color:#7c6aef">business meaning</span>
+      }));
+  }
+
+  return { from: word.from, options };
+}</pre>
+
+    <h3>7.5 Local Schema Cache (SQLite)</h3>
+    <p>Schema is persisted to a local <span class="inline-code">schema_cache.db</span> (SQLite). On app launch, load from cache instantly; on connect, optionally diff with remote. Manual refresh via toolbar button or <span class="inline-code">&lt;leader&gt;rs</span> (vim).</p>
+<pre>-- schema_cache.db structure
+CREATE TABLE schema_snapshots (
+  id          INTEGER PRIMARY KEY,
+  connection  TEXT NOT NULL,          -- connection identifier
+  db_name     TEXT NOT NULL,
+  captured_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  schema_json TEXT NOT NULL           -- full schema as JSON blob
+);
+
+CREATE TABLE column_descriptions (
+  connection  TEXT NOT NULL,
+  db_name     TEXT NOT NULL,
+  table_name  TEXT NOT NULL,
+  column_name TEXT NOT NULL,
+  description TEXT,                   -- from code annotations or manual edit
+  source      TEXT,                   -- "code:go" | "code:ts" | "code:prisma" | "manual"
+  file_path   TEXT,                   -- source file location
+  updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (connection, db_name, table_name, column_name)
+);</pre>
+
+    <h3>7.6 Code-Linked Schema Descriptions</h3>
+    <p>Scan codebase model definitions → extract field comments/tags → enrich schema autocomplete with business context.</p>
+<pre>// Codebase scanner extracts descriptions from model definitions:
+
+<span style="color:#fb923c">// Go struct tag</span>
+type User struct {
+    ID        int64  `json:"id" db:"id"`
+    Phone     string `json:"phone" db:"phone"`      // 用户手机号
+    Nickname  string `json:"nickname" db:"nickname"` // 用户昵称
+}
+
+<span style="color:#60a5fa">// TypeScript interface</span>
+interface User {
+  id: number;        /** 用户ID */
+  phone: string;     /** 用户手机号 */
+  nickname: string;  /** 用户昵称 */
+}
+
+<span style="color:#4ade80">// Prisma schema</span>
+model User {
+  id       Int    @id // 用户ID
+  phone    String     /// 用户手机号
+  nickname String     /// 用户昵称
+}
+
+→ Scanner maps:  table="users" column="phone" description="用户手机号" source="code:go"
+→ CM6 autocomplete shows description as inline detail</pre>
+
+    <h3>7.7 AI SQL Generation via CCR</h3>
+    <p>Use local CCR (Claude Code Router) as LLM proxy. Schema context + code descriptions are injected into the prompt for accurate SQL generation.</p>
+<pre>// User types NL in AI panel, gets SQL back in editor
+// Prompt construction in Rust:
+
+fn build_sql_prompt(nl_query: &str, schema: &SchemaCache, conn: &Connection) -> String {
+    let schema_ctx = schema.to_compact_ddl(conn);  // "CREATE TABLE users (id INT, phone VARCHAR...)"
+    let descriptions = schema.get_descriptions(conn); // column → description map
+
+    format!(
+        "You are a SQL expert. Given this schema:\n\
+         {schema_ctx}\n\n\
+         Column descriptions:\n{descriptions}\n\n\
+         Database: {db_type}\n\n\
+         Generate a single SQL query for: {nl_query}\n\
+         Rules: use CTEs for complex logic, add LIMIT 100 by default."
+    )
+}
+
+// CCR call: POST http://127.0.0.1:3456/v1/messages
+// Model: any LLM available through CCR (kimi, glm, deepseek, etc.)
+// Response → insert into editor at cursor position</pre>
+
+    <h4>AI Panel UX Flow</h4>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="label">1. NL Input</div>
+        <div class="value">"查最近7天活跃用户"</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">2. Build Prompt</div>
+        <div class="value">schema + descriptions</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">3. CCR Proxy</div>
+        <div class="value">localhost:3456</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">4. Parse SQL</div>
+        <div class="value">extract code block</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="label">5. Insert</div>
+        <div class="value">into editor at cursor</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Milestones -->
+  <section>
+    <h2>8. Milestones</h2>
+    <ul class="milestone-list">
+      <li>
+        <strong>M1 — Skeleton (Week 1-2)</strong>
+        <div class="desc">Tauri project setup, window management, tab system, basic CodeMirror editor with vim mode. SQLite single-file connection. Local schema cache (schema_cache.db) with snapshot storage.</div>
+      </li>
+      <li>
+        <strong>M2 — Query Engine (Week 3-4)</strong>
+        <div class="desc">Connection manager, query execution, streaming results, result grid, query history. PostgreSQL + MySQL drivers. Schema cache diff-on-connect + manual refresh (&lt;leader&gt;rs).</div>
+      </li>
+      <li>
+        <strong>M3 — Intelligence (Week 5-6)</strong>
+        <div class="desc">Schema autocomplete with code-linked descriptions. Codebase scanner (Go struct / TS interface / Prisma). Sidebar schema tree with business context. SSH tunnel support.</div>
+      </li>
+      <li>
+        <strong>M4 — AI + Polish (Week 7-8)</strong>
+        <div class="desc">AI SQL generation panel (NL→SQL via CCR). Schema+descriptions injected into prompt. Export (CSV/JSON), split panes, session restore, theming, cross-platform builds.</div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- 9. Risk Assessment -->
+  <section>
+    <h2>9. Risk Assessment</h2>
+    <table class="stack-table">
+      <thead>
+        <tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CM6 vim mode incomplete</td>
+          <td style="color:var(--orange)">Medium</td>
+          <td>Test 50+ vim commands early (M1). Fallback: neovim WASM as alternative.</td>
+        </tr>
+        <tr>
+          <td>WebView performance with large results</td>
+          <td style="color:var(--orange)">Medium</td>
+          <td>Virtual scrolling from day 1. Canvas renderer for 1M+ rows.</td>
+        </tr>
+        <tr>
+          <td>sqlx driver compatibility</td>
+          <td style="color:var(--yellow)">Low</td>
+          <td>Abstract behind trait <code>DatabaseDriver</code>. Swap per-DB if needed.</td>
+        </tr>
+        <tr>
+          <td>Tauri v2 API churn</td>
+          <td style="color:var(--yellow)">Low</td>
+          <td>Pin Tauri v2 stable. Avoid nightly features.</td>
+        </tr>
+        <tr>
+          <td>Codebase scanner accuracy</td>
+          <td style="color:var(--orange)">Medium</td>
+          <td>Tree-sitter grammars are mature for Go/TS. Start with regex fallback for Prisma. Incremental: add languages one at a time.</td>
+        </tr>
+        <tr>
+          <td>CCR unavailable / LLM timeout</td>
+          <td style="color:var(--yellow)">Low</td>
+          <td>AI panel is non-blocking. Show error toast, editor still works. Retry with backoff. Configurable timeout.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="footer">
+    <p>SQL Query Editor — Technical Proposal v0.2.0</p>
+    <p>Tauri v2 + CodeMirror 6 + Vim Mode + AI SQL Generation</p>
+  </footer>
+
+</div>
+</body>
+</html>

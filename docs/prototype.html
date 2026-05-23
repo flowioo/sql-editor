@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SQL 查询编辑器 — 交互原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ===== CSS Variables ===== */
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --surface3: #2e3144;
+    --border: #2e3144;
+    --border2: #3a3d52;
+    --text: #e1e4ed;
+    --text2: #8b8fa3;
+    --text3: #5c6072;
+    --accent: #7c6aef;
+    --accent2: #5b4cc4;
+    --accent-light: rgba(124,106,239,0.15);
+    --green: #4ade80;
+    --blue: #60a5fa;
+    --orange: #fb923c;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --vim-green: #4ade80;
+    --vim-bg: #1a2e1a;
+    --line-num: #3a3d52;
+    --line-num-active: #7c6aef;
+    --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    --sans: 'Inter', -apple-system, 'SF Pro Display', sans-serif;
+    --sidebar-w: 260px;
+    --panel-w: 320px;
+    --toolbar-h: 44px;
+    --editor-h: 220px;
+    --divider-w: 4px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ===== App Container ===== */
+  .app {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-width: 200px;
+    max-width: 400px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 12px 16px;
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-tab {
+    flex: 1;
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 0.8em;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .sidebar-tab:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.03);
+  }
+  .sidebar-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .sidebar-content::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sidebar-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-content::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border-radius: 3px;
+  }
+
+  /* Connection list */
+  .conn-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.1s;
+    gap: 8px;
+  }
+  .conn-item:hover {
+    background: rgba(255,255,255,0.03);
+  }
+  .conn-item.active {
+    background: var(--accent-light);
+  }
+  .conn-item .conn-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+    flex-shrink: 0;
+  }
+  .conn-icon.pg { background: rgba(96,165,250,0.15); color: var(--blue); }
+  .conn-icon.mysql { background: rgba(251,146,60,0.15); color: var(--orange); }
+  .conn-icon.sqlite { background: rgba(74,222,128,0.15); color: var(--green); }
+  .conn-item .conn-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .conn-name {
+    font-size: 0.85em;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .conn-detail {
+    font-size: 0.72em;
+    color: var(--text3);
+  }
+  .conn-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .conn-status.online { background: var(--green); }
+  .conn-status.offline { background: var(--text3); }
+
+  .conn-section-title {
+    padding: 10px 16px 4px;
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text3);
+  }
+
+  /* Schema tree */
+  .tree-item {
+    user-select: none;
+  }
+  .tree-node {
+    display: flex;
+    align-items: center;
+    padding: 4px 16px 4px 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+    gap: 4px;
+  }
+  .tree-node:hover {
+    background: rgba(255,255,255,0.04);
+  }
+  .tree-node .arrow {
+    width: 16px;
+    flex-shrink: 0;
+    text-align: center;
+    color: var(--text3);
+    font-size: 0.7em;
+    transition: transform 0.15s;
+  }
+  .tree-node .arrow.expanded {
+    transform: rotate(90deg);
+  }
+  .tree-node .icon {
+    width: 18px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 0.85em;
+  }
+  .tree-node .label {
+    font-size: 0.82em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+  .tree-node .desc {
+    font-size: 0.7em;
+    color: var(--text3);
+    margin-left: auto;
+    padding-left: 4px;
+    white-space: nowrap;
+  }
+  .tree-children {
+    display: none;
+  }
+  .tree-children.open {
+    display: block;
+  }
+
+  .tree-node.column-n .label { color: var(--text2); }
+  .tree-node.column-n .desc { color: var(--text3); }
+  .tree-node.column-n .icon { color: var(--blue); }
+
+  .tree-node.database .label { color: var(--yellow); font-weight: 500; }
+  .tree-node.database .icon { color: var(--yellow); }
+
+  .tree-node.table .label { color: var(--green); font-weight: 500; }
+  .tree-node.table .icon { color: var(--green); }
+
+  .indent-1 { padding-left: 24px !important; }
+  .indent-2 { padding-left: 40px !important; }
+
+  /* ===== Divider (draggable) ===== */
+  .divider {
+    width: var(--divider-w);
+    cursor: col-resize;
+    background: var(--border);
+    flex-shrink: 0;
+    position: relative;
+    transition: background 0.15s;
+  }
+  .divider:hover,
+  .divider.active {
+    background: var(--accent);
+  }
+  .divider::after {
+    content: '';
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    top: 0;
+    bottom: 0;
+  }
+
+  /* ===== Main Area ===== */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 400px;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    height: var(--toolbar-h);
+    padding: 0 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .toolbar .conn-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 4px 28px 4px 10px;
+    font-size: 0.8em;
+    font-family: var(--sans);
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='%238b8fa3'%3E%3Cpath d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    cursor: pointer;
+    max-width: 180px;
+  }
+  .toolbar .conn-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .toolbar .btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.78em;
+    font-family: var(--sans);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.12s;
+    white-space: nowrap;
+  }
+  .toolbar .btn:hover {
+    opacity: 0.85;
+  }
+  .toolbar .btn:active {
+    transform: scale(0.97);
+  }
+
+  .btn-run {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-run:hover {
+    background: var(--accent2);
+  }
+  .btn-run.running {
+    background: var(--orange);
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border) !important;
+  }
+  .btn-secondary:hover {
+    background: var(--surface3);
+  }
+
+  .btn-icon {
+    background: transparent;
+    color: var(--text2);
+    padding: 5px 8px;
+    font-size: 0.85em;
+  }
+  .btn-icon:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
+
+  .toolbar .spacer {
+    flex: 1;
+  }
+
+  .toolbar .tabs-area {
+    display: flex;
+    gap: 2px;
+    margin-left: 4px;
+  }
+  .toolbar .editor-tab {
+    padding: 4px 12px;
+    border-radius: 4px 4px 0 0;
+    font-size: 0.78em;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .toolbar .editor-tab.active {
+    color: var(--text);
+    background: var(--bg);
+    border-bottom-color: var(--accent);
+  }
+  .toolbar .editor-tab .close {
+    margin-left: 6px;
+    opacity: 0.4;
+    font-size: 0.9em;
+  }
+  .toolbar .editor-tab .close:hover {
+    opacity: 1;
+  }
+
+  /* Editor */
+  .editor-container {
+    flex-shrink: 0;
+    height: var(--editor-h);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.72em;
+    flex-shrink: 0;
+  }
+  .editor-header .vim-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .vim-mode {
+    background: var(--vim-bg);
+    color: var(--vim-green);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 0.9em;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .vim-mode.insert {
+    background: rgba(74,222,128,0.1);
+    color: var(--green);
+  }
+  .vim-mode.visual {
+    background: rgba(124,106,239,0.15);
+    color: var(--accent);
+  }
+  .editor-header .cursor-info {
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 0.95em;
+  }
+
+  .editor-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    background: var(--bg);
+    position: relative;
+  }
+
+  .editor-gutter {
+    width: 48px;
+    flex-shrink: 0;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    text-align: right;
+    padding: 8px 8px 8px 4px;
+    font-family: var(--mono);
+    font-size: 0.78em;
+    line-height: 1.6;
+    color: var(--line-num);
+    overflow: hidden;
+    user-select: none;
+  }
+  .editor-gutter .ln-active {
+    color: var(--line-num-active);
+    font-weight: 600;
+  }
+
+  .editor-content {
+    flex: 1;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 0.85em;
+    line-height: 1.6;
+    color: var(--text);
+    overflow: auto;
+    white-space: pre;
+    tab-size: 2;
+    outline: none;
+  }
+  .editor-content .kw { color: var(--accent); font-weight: 500; }
+  .editor-content .fn { color: var(--blue); }
+  .editor-content .str { color: var(--green); }
+  .editor-content .num { color: var(--orange); }
+  .editor-content .cm { color: var(--text3); font-style: italic; }
+  .editor-content .op { color: var(--yellow); }
+  .editor-content .cursor-blink {
+    background: var(--accent);
+    width: 2px;
+    height: 1.2em;
+    display: inline-block;
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* Resizer for editor height */
+  .resizer-h {
+    height: 4px;
+    cursor: row-resize;
+    background: var(--border);
+    flex-shrink: 0;
+    position: relative;
+    transition: background 0.15s;
+  }
+  .resizer-h:hover,
+  .resizer-h.active {
+    background: var(--accent);
+  }
+  .resizer-h::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+  }
+
+  /* Result area */
+  .result-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 100px;
+  }
+
+  .result-tabs {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    height: 32px;
+    gap: 16px;
+  }
+  .result-tab {
+    font-size: 0.78em;
+    color: var(--text2);
+    padding: 6px 0;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+  .result-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .result-tab .badge {
+    background: var(--accent-light);
+    color: var(--accent);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    margin-left: 4px;
+  }
+  .result-info {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.72em;
+    color: var(--text3);
+  }
+  .result-info .highlight {
+    color: var(--text2);
+  }
+
+  .result-grid-wrapper {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+  }
+  .result-grid-wrapper::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .result-grid-wrapper::-webkit-scrollbar-track {
+    background: var(--bg);
+  }
+  .result-grid-wrapper::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border-radius: 4px;
+  }
+
+  .result-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8em;
+    font-family: var(--mono);
+  }
+  .result-grid th {
+    position: sticky;
+    top: 0;
+    background: var(--surface2);
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.78em;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    z-index: 1;
+  }
+  .result-grid th:hover {
+    background: var(--surface3);
+  }
+  .result-grid th .sort-arrow {
+    margin-left: 4px;
+    opacity: 0.3;
+  }
+  .result-grid th .sort-arrow.active {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .result-grid td {
+    padding: 5px 12px;
+    border-bottom: 1px solid rgba(46,49,68,0.5);
+    color: var(--text);
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .result-grid tr:hover td {
+    background: rgba(124,106,239,0.04);
+  }
+  .result-grid .null-cell {
+    color: var(--text3);
+    font-style: italic;
+  }
+
+  .result-footer {
+    padding: 6px 12px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72em;
+    color: var(--text3);
+    flex-shrink: 0;
+  }
+  .result-footer .virtual-hint {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent);
+  }
+
+  /* ===== Right AI Panel ===== */
+  .ai-panel {
+    width: var(--panel-w);
+    min-width: 250px;
+    max-width: 500px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .ai-panel.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    overflow: hidden;
+    border: none;
+  }
+
+  .ai-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .ai-header h3 {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ai-header .toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 1em;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .ai-header .toggle-btn:hover {
+    background: var(--surface2);
+  }
+
+  .ai-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .ai-messages::-webkit-scrollbar {
+    width: 6px;
+  }
+  .ai-messages::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .ai-messages::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border-radius: 3px;
+  }
+
+  .ai-msg {
+    animation: fadeIn 0.2s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .ai-msg.user {
+    align-self: flex-end;
+    max-width: 85%;
+  }
+  .ai-msg.assistant {
+    align-self: flex-start;
+    max-width: 100%;
+  }
+
+  .ai-msg .bubble {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.82em;
+    line-height: 1.5;
+  }
+  .ai-msg.user .bubble {
+    background: var(--accent);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .ai-msg.assistant .bubble {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+
+  .ai-msg .sql-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 0.85em;
+    line-height: 1.5;
+    margin: 8px 0 4px;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text);
+  }
+  .ai-msg .sql-block .kw { color: var(--accent); }
+  .ai-msg .sql-block .fn { color: var(--blue); }
+  .ai-msg .sql-block .str { color: var(--green); }
+
+  .ai-msg .sql-insert-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background: var(--accent-light);
+    border: 1px solid rgba(124,106,239,0.3);
+    color: var(--accent);
+    font-size: 0.75em;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .ai-msg .sql-insert-btn:hover {
+    background: rgba(124,106,239,0.25);
+  }
+  .ai-msg .thinking-text {
+    color: var(--text3);
+    font-size: 0.8em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+  }
+  .ai-msg .thinking-text .dots::after {
+    content: '...';
+    animation: dots 1.5s steps(4) infinite;
+  }
+  @keyframes dots {
+    0% { content: '.'; }
+    25% { content: '..'; }
+    50% { content: '...'; }
+    75% { content: ''; }
+  }
+
+  .ai-input-area {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .ai-input-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .ai-input-wrap textarea {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.8em;
+    resize: none;
+    min-height: 36px;
+    max-height: 120px;
+    line-height: 1.4;
+    outline: none;
+  }
+  .ai-input-wrap textarea:focus {
+    border-color: var(--accent);
+  }
+  .ai-input-wrap textarea::placeholder {
+    color: var(--text3);
+  }
+  .ai-send-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1em;
+    flex-shrink: 0;
+    transition: background 0.12s;
+  }
+  .ai-send-btn:hover {
+    background: var(--accent2);
+  }
+  .ai-send-btn:disabled {
+    background: var(--surface3);
+    color: var(--text3);
+    cursor: not-allowed;
+  }
+
+  .ai-tools {
+    display: flex;
+    gap: 6px;
+    padding: 0 12px 8px;
+  }
+  .ai-tools .chip {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7em;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    cursor: pointer;
+  }
+  .ai-tools .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.82em;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  .toast.success { border-color: var(--green); }
+  .toast.error { border-color: var(--red); }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 900px) {
+    .ai-panel {
+      width: 280px !important;
+    }
+  }
+  @media (max-width: 700px) {
+    .app {
+      flex-direction: column;
+    }
+    .sidebar {
+      width: 100% !important;
+      min-width: 0;
+      max-width: none;
+      height: 200px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .divider {
+      display: none;
+    }
+    .ai-panel {
+      width: 100% !important;
+      min-width: 0;
+      max-width: none;
+      height: 200px;
+      border-left: none;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .ai-panel.collapsed {
+      height: 0;
+    }
+    .editor-container {
+      height: 160px;
+    }
+    .toolbar .btn span {
+      display: none;
+    }
+    .toolbar .conn-select {
+      max-width: 120px;
+    }
+    .result-info {
+      display: none;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ===== Sidebar ===== -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" data-tab="connections" onclick="switchSidebarTab('connections')">连接</div>
+      <div class="sidebar-tab" data-tab="schema" onclick="switchSidebarTab('schema')">数据库</div>
+      <div class="sidebar-tab" data-tab="history" onclick="switchSidebarTab('history')">历史</div>
+    </div>
+
+    <div class="sidebar-content" id="sidebar-content">
+      <!-- Connections panel -->
+      <div id="panel-connections" class="sidebar-panel">
+        <div class="conn-section-title">已保存的连接</div>
+        <div class="conn-item active" onclick="selectConn(this)">
+          <div class="conn-icon pg">PG</div>
+          <div class="conn-info">
+            <div class="conn-name">生产数据库 (PostgreSQL)</div>
+            <div class="conn-detail">pg-prod.example.com:5432 / shop_db</div>
+          </div>
+          <div class="conn-status online"></div>
+        </div>
+        <div class="conn-item" onclick="selectConn(this)">
+          <div class="conn-icon pg">PG</div>
+          <div class="conn-info">
+            <div class="conn-name">测试数据库 (PostgreSQL)</div>
+            <div class="conn-detail">localhost:5432 / test_db</div>
+          </div>
+          <div class="conn-status online"></div>
+        </div>
+        <div class="conn-item" onclick="selectConn(this)">
+          <div class="conn-icon mysql">MY</div>
+          <div class="conn-info">
+            <div class="conn-name">用户中心 (MySQL)</div>
+            <div class="conn-detail">10.0.1.5:3306 / user_center</div>
+          </div>
+          <div class="conn-status online"></div>
+        </div>
+        <div class="conn-item" onclick="selectConn(this)">
+          <div class="conn-icon sqlite">SQ</div>
+          <div class="conn-info">
+            <div class="conn-name">本地开发 (SQLite)</div>
+            <div class="conn-detail">~/dev/local.db</div>
+          </div>
+          <div class="conn-status online"></div>
+        </div>
+        <div class="conn-item" onclick="selectConn(this)">
+          <div class="conn-icon pg">PG</div>
+          <div class="conn-info">
+            <div class="conn-name">报表数据库</div>
+            <div class="conn-detail">pg-report.example.com:5432 / analytics</div>
+          </div>
+          <div class="conn-status offline"></div>
+        </div>
+      </div>
+
+      <!-- Schema panel -->
+      <div id="panel-schema" class="sidebar-panel" style="display:none;">
+        <div class="tree-item">
+          <div class="tree-node database" onclick="toggleTree(this)">
+            <span class="arrow expanded">▶</span>
+            <span class="icon">🗄️</span>
+            <span class="label">shop_db (PostgreSQL)</span>
+          </div>
+          <div class="tree-children open">
+            <!-- public schema -->
+            <div class="tree-item">
+              <div class="tree-node table indent-1" onclick="toggleTree(this)">
+                <span class="arrow expanded">▶</span>
+                <span class="icon">📋</span>
+                <span class="label">users</span>
+                <span class="desc">用户表</span>
+              </div>
+              <div class="tree-children open">
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">#</span><span class="label">id</span><span class="desc">用户ID</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">@</span><span class="label">phone</span><span class="desc">手机号</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">✏️</span><span class="label">nickname</span><span class="desc">昵称</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📧</span><span class="label">email</span><span class="desc">邮箱</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">🔑</span><span class="label">password_hash</span><span class="desc">密码哈希</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📅</span><span class="label">created_at</span><span class="desc">注册时间</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📅</span><span class="label">updated_at</span><span class="desc">更新时间</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">⚪</span><span class="label">status</span><span class="desc">状态 (active/inactive/banned)</span></div>
+              </div>
+            </div>
+            <div class="tree-item">
+              <div class="tree-node table indent-1" onclick="toggleTree(this)">
+                <span class="arrow expanded">▶</span>
+                <span class="icon">📋</span>
+                <span class="label">orders</span>
+                <span class="desc">订单表</span>
+              </div>
+              <div class="tree-children open">
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">#</span><span class="label">id</span><span class="desc">订单ID</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">🔗</span><span class="label">user_id</span><span class="desc">用户ID (FK → users.id)</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">🔗</span><span class="label">product_id</span><span class="desc">商品ID (FK → products.id)</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">💰</span><span class="label">amount</span><span class="desc">金额</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📦</span><span class="label">quantity</span><span class="desc">数量</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📅</span><span class="label">created_at</span><span class="desc">下单时间</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">⚪</span><span class="label">status</span><span class="desc">订单状态</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📝</span><span class="label">remark</span><span class="desc">备注</span></div>
+              </div>
+            </div>
+            <div class="tree-item">
+              <div class="tree-node table indent-1" onclick="toggleTree(this)">
+                <span class="arrow expanded">▶</span>
+                <span class="icon">📋</span>
+                <span class="label">products</span>
+                <span class="desc">商品表</span>
+              </div>
+              <div class="tree-children open">
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">#</span><span class="label">id</span><span class="desc">商品ID</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📛</span><span class="label">name</span><span class="desc">商品名称</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">💰</span><span class="label">price</span><span class="desc">价格</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📦</span><span class="label">stock</span><span class="desc">库存</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">🏷️</span><span class="label">category</span><span class="desc">分类</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📝</span><span class="label">description</span><span class="desc">商品描述</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">🖼️</span><span class="label">image_url</span><span class="desc">图片链接</span></div>
+                <div class="tree-node column-n indent-2"><span class="arrow"></span><span class="icon">📅</span><span class="label">created_at</span><span class="desc">创建时间</span></div>
+              </div>
+            </div>
+            <!-- views -->
+            <div class="tree-item">
+              <div class="tree-node table indent-1" onclick="toggleTree(this)">
+                <span class="arrow">▶</span>
+                <span class="icon">👁️</span>
+                <span class="label">v_order_summary</span>
+                <span class="desc">订单汇总视图</span>
+              </div>
+              <div class="tree-children"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History panel -->
+      <div id="panel-history" class="sidebar-panel" style="display:none;">
+        <div style="padding:12px 16px;font-size:0.8em;color:var(--text3);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <input type="text" placeholder="搜索历史查询..." style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:0.85em;outline:none;">
+          </div>
+          <div class="history-item" style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+            <div style="color:var(--text2);font-family:var(--mono);font-size:0.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">SELECT * FROM users WHERE ...</div>
+            <div style="display:flex;gap:12px;font-size:0.75em;margin-top:4px;">
+              <span>⏱ 23ms</span>
+              <span>📅 10:32:15</span>
+              <span style="color:var(--green);">128 rows</span>
+            </div>
+          </div>
+          <div class="history-item" style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+            <div style="color:var(--text2);font-family:var(--mono);font-size:0.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">SELECT o.id, u.nickname, p.name ...</div>
+            <div style="display:flex;gap:12px;font-size:0.75em;margin-top:4px;">
+              <span>⏱ 156ms</span>
+              <span>📅 10:28:03</span>
+              <span style="color:var(--green);">42 rows</span>
+            </div>
+          </div>
+          <div class="history-item" style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+            <div style="color:var(--text2);font-family:var(--mono);font-size:0.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">INSERT INTO orders (...) VALUES (...)</div>
+            <div style="display:flex;gap:12px;font-size:0.75em;margin-top:4px;">
+              <span>⏱ 45ms</span>
+              <span>📅 10:15:42</span>
+              <span style="color:var(--orange);">1 affected</span>
+            </div>
+          </div>
+          <div class="history-item" style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+            <div style="color:var(--text2);font-family:var(--mono);font-size:0.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">SELECT category, COUNT(*) as cnt ...</div>
+            <div style="display:flex;gap:12px;font-size:0.75em;margin-top:4px;">
+              <span>⏱ 89ms</span>
+              <span>📅 09:52:30</span>
+              <span style="color:var(--green);">8 rows</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Divider 1 ===== -->
+  <div class="divider" id="divider1"></div>
+
+  <!-- ===== Main Area ===== -->
+  <div class="main-area" id="mainArea">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <select class="conn-select">
+        <option>生产数据库 (PostgreSQL)</option>
+        <option>测试数据库 (PostgreSQL)</option>
+        <option>用户中心 (MySQL)</option>
+        <option>本地开发 (SQLite)</option>
+      </select>
+
+      <button class="btn btn-run" id="btnRun" onclick="runQuery()">
+        <span>▶</span>
+        <span>运行</span>
+      </button>
+
+      <button class="btn btn-secondary" onclick="showToast('✅ 查询已保存', 'success')">
+        💾 <span>保存</span>
+      </button>
+
+      <button class="btn btn-secondary" onclick="showToast('📤 导出 CSV 中...', 'success')">
+        📤 <span>导出</span>
+      </button>
+
+      <button class="btn btn-secondary" onclick="showToast('🔄 正在刷新 schema...', 'success'); setTimeout(() => showToast('✅ Schema 刷新完成', 'success'), 1500)">
+        🔄 <span>刷新 Schema</span>
+      </button>
+
+      <div class="spacer"></div>
+
+      <div class="tabs-area">
+        <div class="editor-tab active">
+          查询 1 <span class="close" onclick="event.stopPropagation();showToast('❌ 标签已关闭', 'success')">×</span>
+        </div>
+        <div class="editor-tab" onclick="this.classList.add('active')">
+          查询 2 <span class="close" onclick="event.stopPropagation();showToast('❌ 标签已关闭', 'success')">×</span>
+        </div>
+        <button class="btn btn-icon" onclick="showToast('➕ 新建查询标签', 'success')">+</button>
+      </div>
+
+      <button class="btn btn-icon" id="toggleAiBtn" onclick="toggleAIPanel()" title="切换 AI 面板">
+        🤖
+      </button>
+    </div>
+
+    <!-- Editor -->
+    <div class="editor-container" id="editorContainer">
+      <div class="editor-header">
+        <div class="vim-indicator">
+          <span class="vim-mode" id="vimMode">NORMAL</span>
+          <span class="vim-indicator-text" style="color:var(--text3);font-size:0.9em;">— Vim 模式已启用</span>
+        </div>
+        <div class="cursor-info">
+          <span id="cursorPos">行 1，列 1</span>
+        </div>
+      </div>
+      <div class="editor-body" onclick="focusEditor()">
+        <div class="editor-gutter" id="editorGutter">
+          1<br>2<br>3<br>4<br>5<br>6<br>7<br><span class="ln-active">8</span><br>9<br>10<br>11<br>12<br>13
+        </div>
+        <div class="editor-content" id="editorContent" contenteditable="false" spellcheck="false">
+          <span class="kw">SELECT</span>
+          <span class="cm">-- 查询近 30 天活跃用户及其订单总额</span>
+u.id,
+u.nickname,
+u.phone,
+<span class="kw">COUNT</span>(o.id) <span class="kw">AS</span> order_count,
+<span class="kw">COALESCE</span>(<span class="kw">SUM</span>(o.amount), <span class="num">0</span>) <span class="kw">AS</span> total_spent
+<span class="kw">FROM</span> users u
+<span class="kw">LEFT JOIN</span> orders o <span class="kw">ON</span> u.id = o.user_id
+<span class="kw">WHERE</span> u.created_at &gt;= <span class="kw">NOW</span>() - <span class="kw">INTERVAL</span> <span class="str">'30 days'</span>
+<span class="kw">  AND</span> u.status = <span class="str">'active'</span>
+<span class="kw">GROUP BY</span> u.id, u.nickname, u.phone
+<span class="kw">ORDER BY</span> total_spent <span class="kw">DESC</span>
+<span class="kw">LIMIT</span> <span class="num">100</span><span class="cursor-blink"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Horizontal divider -->
+    <div class="resizer-h" id="resizerH"></div>
+
+    <!-- Result area -->
+    <div class="result-area">
+      <div class="result-tabs">
+        <div class="result-tab active">
+          查询结果 <span class="badge">128 行</span>
+        </div>
+        <div class="result-tab">
+          消息
+        </div>
+        <div class="result-tab">
+          执行计划
+        </div>
+        <div class="result-info">
+          <span>⏱ <span class="highlight">23ms</span></span>
+          <span>📊 共 <span class="highlight">128</span> 条记录</span>
+          <span>📄 已加载 <span class="highlight">128</span> / 128</span>
+        </div>
+      </div>
+      <div class="result-grid-wrapper" id="resultGridWrapper">
+        <table class="result-grid" id="resultGrid">
+          <thead>
+            <tr>
+              <th onclick="sortByColumn(this, 0)">id <span class="sort-arrow active">↓</span></th>
+              <th onclick="sortByColumn(this, 1)">nickname <span class="sort-arrow">↑</span></th>
+              <th onclick="sortByColumn(this, 2)">phone <span class="sort-arrow"></span></th>
+              <th onclick="sortByColumn(this, 3)">order_count <span class="sort-arrow"></span></th>
+              <th onclick="sortByColumn(this, 4)">total_spent <span class="sort-arrow"></span></th>
+              <th onclick="sortByColumn(this, 5)">last_order_at <span class="sort-arrow"></span></th>
+            </tr>
+          </thead>
+          <tbody id="resultBody">
+          </tbody>
+        </table>
+      </div>
+      <div class="result-footer">
+        <span>📋 共 128 行，显示 1-50</span>
+        <span class="virtual-hint">⚡ 虚拟滚动 | 滚动加载更多</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Divider 2 ===== -->
+  <div class="divider" id="divider2"></div>
+
+  <!-- ===== AI Panel ===== -->
+  <div class="ai-panel" id="aiPanel">
+    <div class="ai-header">
+      <h3>🤖 AI SQL 助手</h3>
+      <button class="toggle-btn" onclick="toggleAIPanel()" title="关闭面板">✕</button>
+    </div>
+
+    <div class="ai-messages" id="aiMessages">
+      <div class="ai-msg assistant">
+        <div class="bubble">
+          你好！我是 AI SQL 助手。你可以用自然语言描述你想查询的内容，我会帮你生成 SQL。
+          <br><br>
+          例如：「查询最近 7 天注册的用户」「按分类统计商品数量」「找出消费最高的前 10 名用户」
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-tools">
+      <span class="chip" onclick="quickPrompt('查询本周新增用户')">📅 本周新增用户</span>
+      <span class="chip" onclick="quickPrompt('按分类统计商品数量')">📊 分类统计</span>
+      <span class="chip" onclick="quickPrompt('查询消费最多的前10名用户')">🏆 消费排行</span>
+    </div>
+
+    <div class="ai-input-area">
+      <div class="ai-input-wrap">
+        <textarea id="aiInput" rows="2" placeholder="用自然语言描述查询需求..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMessage()}"></textarea>
+        <button class="ai-send-btn" id="aiSendBtn" onclick="sendAiMessage()">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Mock Data =====
+const mockResultRows = [
+  { id: 1001, nickname: '张三', phone: '138****1234', order_count: 23, total_spent: 12580.50, last_order_at: '2026-05-22 14:32:15' },
+  { id: 1002, nickname: '李四', phone: '139****5678', order_count: 18, total_spent: 8920.00, last_order_at: '2026-05-22 10:15:42' },
+  { id: 1003, nickname: '王五', phone: '186****9012', order_count: 15, total_spent: 7650.80, last_order_at: '2026-05-21 18:45:30' },
+  { id: 1004, nickname: '赵六', phone: '150****3456', order_count: 12, total_spent: 6340.20, last_order_at: '2026-05-21 09:22:10' },
+  { id: 1005, nickname: '孙七', phone: '187****7890', order_count: 10, total_spent: 5210.00, last_order_at: '2026-05-20 16:38:55' },
+  { id: 1006, nickname: '周八', phone: '136****2345', order_count: 9, total_spent: 4890.60, last_order_at: '2026-05-20 11:12:08' },
+  { id: 1007, nickname: '吴九', phone: '158****6789', order_count: 8, total_spent: 4320.75, last_order_at: '2026-05-19 20:05:33' },
+  { id: 1008, nickname: '郑十', phone: '177****0123', order_count: 7, total_spent: 3890.40, last_order_at: '2026-05-19 08:44:12' },
+  { id: 1009, nickname: '陈芳', phone: '135****4567', order_count: 6, total_spent: 3450.30, last_order_at: '2026-05-18 15:27:49' },
+  { id: 1010, nickname: '林娟', phone: '152****8901', order_count: 5, total_spent: 2980.50, last_order_at: '2026-05-18 12:10:25' },
+  { id: 1011, nickname: '黄伟', phone: '131****2346', order_count: 5, total_spent: 2760.00, last_order_at: '2026-05-17 19:33:18' },
+  { id: 1012, nickname: '杨秀', phone: '188****6780', order_count: 4, total_spent: 2340.25, last_order_at: '2026-05-17 10:55:40' },
+  { id: 1013, nickname: '刘强', phone: '156****0124', order_count: 4, total_spent: 1980.60, last_order_at: '2026-05-16 14:20:55' },
+  { id: 1014, nickname: '何丽', phone: '137****4568', order_count: 3, total_spent: 1560.80, last_order_at: '2026-05-16 09:38:12' },
+  { id: 1015, nickname: '马超', phone: '153****8902', order_count: 3, total_spent: 1230.40, last_order_at: '2026-05-15 21:15:30' },
+  { id: 1016, nickname: '高远', phone: '189****2347', order_count: 2, total_spent: 980.50, last_order_at: '2026-05-15 16:42:08' },
+  { id: 1017, nickname: '罗琳', phone: '130****6781', order_count: 2, total_spent: 760.30, last_order_at: '2026-05-14 12:30:45' },
+  { id: 1018, nickname: '梁宇', phone: '155****0125', order_count: 1, total_spent: 520.00, last_order_at: '2026-05-14 08:18:22' },
+  { id: 1019, nickname: '宋佳', phone: '132****4569', order_count: 1, total_spent: 350.60, last_order_at: '2026-05-13 17:55:10' },
+  { id: 1020, nickname: '唐明', phone: '159****8903', order_count: 1, total_spent: 199.90, last_order_at: '2026-05-13 11:22:35' },
+];
+
+// More rows for virtual scroll hint
+while (mockResultRows.length < 50) {
+  const base = mockResultRows.length + 1001;
+  mockResultRows.push({
+    id: base,
+    nickname: `用户${base}`,
+    phone: `1${String(base).slice(0,2)}****${String(base).slice(-4)}`,
+    order_count: Math.floor(Math.random() * 10),
+    total_spent: +(Math.random() * 5000).toFixed(2),
+    last_order_at: '2026-05-1' + (Math.floor(Math.random() * 9) + 1) + ' 10:00:00'
+  });
+}
+
+let sortState = { col: 0, asc: false };
+
+// ===== Render Result Grid =====
+function renderResult() {
+  const tbody = document.getElementById('resultBody');
+  const sorted = [...mockResultRows].sort((a, b) => {
+    const keys = ['id', 'nickname', 'phone', 'order_count', 'total_spent', 'last_order_at'];
+    const k = keys[sortState.col];
+    let va = a[k], vb = b[k];
+    if (typeof va === 'string') {
+      va = va.toLowerCase();
+      vb = vb.toLowerCase();
+    }
+    if (va < vb) return sortState.asc ? -1 : 1;
+    if (va > vb) return sortState.asc ? 1 : -1;
+    return 0;
+  });
+
+  tbody.innerHTML = sorted.slice(0, 50).map(r => {
+    const cells = ['id', 'nickname', 'phone', 'order_count', 'total_spent', 'last_order_at'];
+    return '<tr>' + cells.map(c => {
+      let val = r[c];
+      if (val === null || val === undefined) return '<td class="null-cell">NULL</td>';
+      if (c === 'total_spent') val = '¥' + val.toFixed(2);
+      return `<td>${val}</td>`;
+    }).join('') + '</tr>';
+  }).join('');
+}
+
+renderResult();
+
+// ===== Tab switching =====
+function switchSidebarTab(tab) {
+  document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sidebar-panel').forEach(p => p.style.display = 'none');
+  document.querySelector(`.sidebar-tab[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`panel-${tab}`).style.display = 'block';
+}
+
+// ===== Connection selection =====
+function selectConn(el) {
+  document.querySelectorAll('.conn-item').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ===== Tree toggle =====
+function toggleTree(el) {
+  const children = el.parentElement.querySelector('.tree-children');
+  if (!children) return;
+  const arrow = el.querySelector('.arrow');
+  if (children.classList.contains('open')) {
+    children.classList.remove('open');
+    arrow.classList.remove('expanded');
+  } else {
+    children.classList.add('open');
+    arrow.classList.add('expanded');
+  }
+}
+
+// ===== Vim mode indicator switching =====
+let vimModeIndex = 0;
+const vimModes = ['NORMAL', 'INSERT', 'VISUAL'];
+const vimClasses = ['', 'insert', 'visual'];
+const editorContent = document.getElementById('editorContent');
+
+function focusEditor() {
+  const vimEl = document.getElementById('vimMode');
+  vimModeIndex = (vimModeIndex + 1) % vimModes.length;
+  vimEl.textContent = vimModes[vimModeIndex];
+  vimEl.className = 'vim-mode ' + vimClasses[vimModeIndex];
+}
+
+// ===== Run query simulation =====
+function runQuery() {
+  const btn = document.getElementById('btnRun');
+  if (btn.classList.contains('running')) return;
+
+  btn.classList.add('running');
+  btn.innerHTML = '⏳ <span>运行中</span>';
+
+  // Simulate cursor position update
+  document.getElementById('cursorPos').textContent = '行 8，列 1';
+
+  setTimeout(() => {
+    btn.classList.remove('running');
+    btn.innerHTML = '▶ <span>运行</span>';
+    renderResult();
+    showToast('✅ 查询完成 — 128 行结果，耗时 23ms', 'success');
+  }, 800);
+}
+
+// ===== Sort columns =====
+function sortByColumn(th, idx) {
+  const headers = document.querySelectorAll('.result-grid th');
+  if (sortState.col === idx) {
+    sortState.asc = !sortState.asc;
+  } else {
+    sortState.col = idx;
+    sortState.asc = true;
+  }
+
+  headers.forEach((h, i) => {
+    const arrow = h.querySelector('.sort-arrow');
+    if (!arrow) return;
+    arrow.className = 'sort-arrow';
+    arrow.textContent = i === idx ? (sortState.asc ? '↑' : '↓') : '';
+    if (i === idx) arrow.classList.add('active');
+  });
+
+  renderResult();
+}
+
+// ===== AI Panel =====
+function toggleAIPanel() {
+  const panel = document.getElementById('aiPanel');
+  const btn = document.getElementById('toggleAiBtn');
+  panel.classList.toggle('collapsed');
+  btn.style.opacity = panel.classList.contains('collapsed') ? '0.5' : '1';
+}
+
+function addAiMessage(role, content, sql) {
+  const container = document.getElementById('aiMessages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg ' + role;
+
+  let html = '<div class="bubble">';
+  if (role === 'assistant' && sql) {
+    html += content;
+    html += '<div class="sql-block">' + sql + '</div>';
+    html += '<div class="sql-insert-btn" onclick="insertToEditor(\'' + sql.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n') + '\')">📥 插入到编辑器</div>';
+  } else {
+    html += content;
+  }
+  html += '</div>';
+  div.innerHTML = html;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function sendAiMessage() {
+  const input = document.getElementById('aiInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  addAiMessage('user', text);
+  input.value = '';
+
+  const sendBtn = document.getElementById('aiSendBtn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '⏳';
+
+  // Show thinking indicator
+  const container = document.getElementById('aiMessages');
+  const thinkingDiv = document.createElement('div');
+  thinkingDiv.className = 'ai-msg assistant';
+  thinkingDiv.id = 'thinkingIndicator';
+  thinkingDiv.innerHTML = '<div class="bubble"><div class="thinking-text">🤔 正在思考<span class="dots">...</span></div></div>';
+  container.appendChild(thinkingDiv);
+  container.scrollTop = container.scrollHeight;
+
+  setTimeout(() => {
+    const indicator = document.getElementById('thinkingIndicator');
+    if (indicator) indicator.remove();
+
+    let sql = '';
+    let response = '';
+
+    if (text.includes('用户') && text.includes('订单') && text.includes('消费')) {
+      sql = `SELECT u.id, u.nickname, u.phone,\n       COUNT(o.id) AS order_count,\n       COALESCE(SUM(o.amount), 0) AS total_spent\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nWHERE o.created_at >= NOW() - INTERVAL '30 days'\nGROUP BY u.id, u.nickname, u.phone\nORDER BY total_spent DESC\nLIMIT 20;`;
+      response = '根据你的需求，我生成了以下查询：统计近30天有消费的用户及其订单总额，并按消费金额降序排列。';
+    } else if (text.includes('本周') || text.includes('注册') || text.includes('新增用户')) {
+      sql = `SELECT id, nickname, phone, created_at\nFROM users\nWHERE created_at >= DATE_TRUNC('week', NOW())\n  AND created_at < DATE_TRUNC('week', NOW()) + INTERVAL '7 days'\nORDER BY created_at DESC;`;
+      response = '以下SQL查询本周新增注册的用户：';
+    } else if (text.includes('分类') || text.includes('统计')) {
+      sql = `SELECT p.category,\n       COUNT(p.id) AS product_count,\n       AVG(p.price)::numeric(10,2) AS avg_price,\n       SUM(p.stock) AS total_stock\nFROM products p\nGROUP BY p.category\nORDER BY product_count DESC;`;
+      response = '按分类统计商品数量、平均价格和总库存：';
+    } else {
+      sql = `-- 基于你的查询：${text}\nSELECT *\nFROM information_schema.columns\nWHERE table_name IN ('users', 'orders', 'products')\n  AND table_schema = 'public'\nLIMIT 50;`;
+      response = '基于你的描述，我理解你需要查询相关信息，以下是对应的SQL：';
+    }
+
+    addAiMessage('assistant', response, sql);
+    sendBtn.disabled = false;
+    sendBtn.textContent = '➤';
+  }, 1200 + Math.random() * 800);
+}
+
+function quickPrompt(text) {
+  document.getElementById('aiInput').value = text;
+  sendAiMessage();
+}
+
+function insertToEditor(sql) {
+  const displaySql = sql.replace(/\\n/g, '\n');
+  showToast('📥 SQL 已插入到编辑器光标位置', 'success');
+  // In a real app, this would insert at CM6 cursor position
+}
+
+// ===== Toast =====
+let toastTimeout = null;
+function showToast(msg, type) {
+  const toast = document.getElementById('toast');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toast.textContent = msg;
+  toast.className = 'toast ' + (type || '');
+  toast.classList.add('show');
+  toastTimeout = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2500);
+}
+
+// ===== Keyboard shortcut: Run =====
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runQuery();
+  }
+});
+
+// ===== Resizer visual feedback =====
+document.querySelectorAll('.divider, .resizer-h').forEach(el => {
+  el.addEventListener('mousedown', function(e) {
+    this.classList.add('active');
+    const onUp = () => {
+      this.classList.remove('active');
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mouseup', onUp);
+  });
+});
+
+// ===== Initial UI state: Collapse AI panel hint =====
+console.log('SQL Query Editor Prototype loaded');
+</script>
+</body>
+</html>

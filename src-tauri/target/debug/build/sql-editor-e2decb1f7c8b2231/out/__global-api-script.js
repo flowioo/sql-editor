@@ -1,0 +1,1 @@
+["/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tauri-2.11.2/scripts/bundle.global.js","/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tauri-plugin-opener-2.5.4/api-iife.js"]

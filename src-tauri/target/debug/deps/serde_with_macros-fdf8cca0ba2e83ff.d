@@ -1,0 +1,8 @@
+/Users/baiju/Documents/lab/sql-editor/src-tauri/target/debug/deps/serde_with_macros-fdf8cca0ba2e83ff.d: /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/lib.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/apply.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/lazy_bool.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/utils.rs
+
+/Users/baiju/Documents/lab/sql-editor/src-tauri/target/debug/deps/libserde_with_macros-fdf8cca0ba2e83ff.dylib: /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/lib.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/apply.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/lazy_bool.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/utils.rs
+
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/lib.rs:
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/apply.rs:
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/lazy_bool.rs:
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/serde_with_macros-3.20.0/src/utils.rs:

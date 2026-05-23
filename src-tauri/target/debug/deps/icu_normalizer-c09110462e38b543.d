@@ -1,0 +1,10 @@
+/Users/baiju/Documents/lab/sql-editor/src-tauri/target/debug/deps/icu_normalizer-c09110462e38b543.d: /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/lib.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/properties.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/provider.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/uts46.rs
+
+/Users/baiju/Documents/lab/sql-editor/src-tauri/target/debug/deps/libicu_normalizer-c09110462e38b543.rlib: /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/lib.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/properties.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/provider.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/uts46.rs
+
+/Users/baiju/Documents/lab/sql-editor/src-tauri/target/debug/deps/libicu_normalizer-c09110462e38b543.rmeta: /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/lib.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/properties.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/provider.rs /Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/uts46.rs
+
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/lib.rs:
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/properties.rs:
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/provider.rs:
+/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/icu_normalizer-2.2.0/src/uts46.rs:

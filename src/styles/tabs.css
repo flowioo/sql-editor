@@ -1,0 +1,72 @@
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 4px 4px 0 0;
+  font-size: 0.78em;
+  color: var(--text2);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: var(--sans);
+  border-bottom: 2px solid transparent;
+  transition: all 0.12s;
+}
+
+.editor-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.editor-tab.active {
+  color: var(--text);
+  background: var(--bg);
+  border-bottom-color: var(--accent);
+}
+
+.tab-close {
+  margin-left: 4px;
+  opacity: 0;
+  font-size: 0.9em;
+  border: none;
+  background: none;
+  color: var(--text2);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  border-radius: 2px;
+}
+
+.editor-tab:hover .tab-close {
+  opacity: 0.5;
+}
+
+.tab-close:hover {
+  opacity: 1 !important;
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.tab-add {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: var(--text2);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: var(--sans);
+}
+
+.tab-add:hover {
+  color: var(--text);
+  background: var(--surface2);
+}

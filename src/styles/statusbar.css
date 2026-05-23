@@ -1,0 +1,21 @@
+.status-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.72em;
+  color: var(--text3);
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.status-bar .status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-bar .spacer {
+  flex: 1;
+}

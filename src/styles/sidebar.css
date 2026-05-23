@@ -1,0 +1,128 @@
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: 200px;
+  max-width: 400px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 0.8em;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+}
+
+.sidebar-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sidebar-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.conn-section-title {
+  padding: 10px 16px 4px;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text3);
+}
+
+.conn-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 8px;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+}
+
+.conn-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.conn-item.active {
+  background: var(--accent-light);
+}
+
+.conn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75em;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.conn-icon.pg { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
+.conn-icon.mysql { background: rgba(251, 146, 60, 0.15); color: var(--orange); }
+.conn-icon.sqlite { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+
+.conn-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conn-name {
+  font-size: 0.85em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conn-detail {
+  font-size: 0.72em;
+  color: var(--text3);
+}
+
+.conn-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conn-status.online { background: var(--green); }
+.conn-status.offline { background: var(--text3); }
+
+.sidebar-placeholder {
+  padding: 16px;
+  color: var(--text3);
+  font-size: 0.8em;
+  text-align: center;
+}

@@ -1,0 +1,11 @@
+cargo:rerun-if-changed=permissions
+cargo:PERMISSION_FILES_PATH=/Users/baiju/Documents/lab/sql-editor/src-tauri/target/debug/build/tauri-plugin-opener-05d6b7438a098f29/out/tauri-plugin-opener-permission-files
+cargo:rerun-if-env-changed=REMOVE_UNUSED_COMMANDS
+cargo:GLOBAL_SCOPE_SCHEMA_PATH=/Users/baiju/Documents/lab/sql-editor/src-tauri/target/debug/build/tauri-plugin-opener-05d6b7438a098f29/out/global-scope.json
+cargo:GLOBAL_API_SCRIPT_PATH=/Users/baiju/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tauri-plugin-opener-2.5.4/api-iife.js
+cargo:rustc-check-cfg=cfg(mobile)
+cargo:rustc-check-cfg=cfg(desktop)
+cargo:rustc-cfg=desktop
+cargo:rustc-check-cfg=cfg(desktop)
+cargo:rustc-cfg=desktop
+cargo:rustc-check-cfg=cfg(mobile)

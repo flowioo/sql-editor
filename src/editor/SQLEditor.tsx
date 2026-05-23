@@ -70,7 +70,7 @@ export function SQLEditor({
 
     const runKeymap = keymap.of([
       {
-        key: "Ctrl-Enter",
+        key: "Mod-Enter",
         run: () => {
           onRunRef.current?.();
           return true;

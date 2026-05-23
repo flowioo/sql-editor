@@ -21,6 +21,10 @@ export function loadSavedConnections(): SavedConnection[] {
   }
 }
 
+function writeSavedConnections(list: SavedConnection[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
 export function saveConnection(conn: SavedConnection): void {
   const list = loadSavedConnections();
   const idx = list.findIndex((c) => c.id === conn.id);
@@ -29,17 +33,15 @@ export function saveConnection(conn: SavedConnection): void {
   } else {
     list.push(conn);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  writeSavedConnections(list);
 }
 
 export function removeSavedConnection(id: string): void {
   const list = loadSavedConnections().filter((c) => c.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  writeSavedConnections(list);
 }
 
 function parseDatabaseUrl(url: string): ConnectionConfig | null {
-  // postgresql://user:pass@host:port/db?sslmode=disable
-  // mysql://user:pass@host:port/db
   try {
     const u = new URL(url);
     const type = u.protocol.replace(":", "") as "postgresql" | "mysql";
@@ -54,10 +56,20 @@ function parseDatabaseUrl(url: string): ConnectionConfig | null {
       user: decodeURIComponent(u.username || ""),
       password,
       database,
-      url,  // pass raw URL to preserve sslmode etc.
+      url,
     };
   } catch {
     return null;
+  }
+}
+
+function makeDefaultName(config: ConnectionConfig): string {
+  switch (config.type) {
+    case "sqlite":
+      return config.path.split("/").pop() || config.path;
+    case "postgresql":
+    case "mysql":
+      return `${config.database} (${config.host})`;
   }
 }
 
@@ -67,13 +79,14 @@ interface ConnectionDialogProps {
 }
 
 export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) {
-  const [mode, setMode] = useState<"form" | "url">("form");
+  const [mode, setMode] = useState<"saved" | "url" | "form">("saved");
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState("");
+  const [alias, setAlias] = useState("");
   const [activeTab, setActiveTab] = useState<"sqlite" | "postgresql" | "mysql">("postgresql");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections());
+  const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections);
 
   // SQLite
   const [sqlitePath, setSqlitePath] = useState("");
@@ -118,18 +131,24 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
     }
   }, [buildConfig]);
 
-  const handleConnect = useCallback(() => {
-    const config = buildConfig();
-    if (!config) return;
-    // Auto-save connection
-    const id = config.type === "sqlite" ? config.path : `${config.type}://${config.user}@${config.host}:${config.port}/${config.database}`;
-    const name = config.type === "sqlite"
-      ? config.path.split("/").pop() || config.path
-      : `${config.database} (${config.host})`;
-    saveConnection({ id, name, config });
+  const doConnectAndSave = useCallback((config: ConnectionConfig, name?: string) => {
+    const displayName = name || alias || makeDefaultName(config);
+    if (config.type === "sqlite") {
+      saveConnection({ id: config.path, name: displayName, config });
+    } else if (config.type === "postgresql") {
+      saveConnection({ id: `postgresql://${config.user}@${config.host}:${config.port}/${config.database}`, name: displayName, config });
+    } else {
+      saveConnection({ id: `mysql://${config.user}@${config.host}:${config.port}/${config.database}`, name: displayName, config });
+    }
     setSavedList(loadSavedConnections());
     onConnect(config);
-  }, [buildConfig, onConnect]);
+  }, [alias, onConnect]);
+
+  const handleFormConnect = useCallback(() => {
+    const config = buildConfig();
+    if (!config) return;
+    doConnectAndSave(config);
+  }, [buildConfig, doConnectAndSave]);
 
   const handleUrlConnect = useCallback(() => {
     const config = parseDatabaseUrl(urlInput.trim());
@@ -138,13 +157,18 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
       return;
     }
     setUrlError("");
-    // Auto-save — config is guaranteed PG or MySQL from parseDatabaseUrl
-    const id = `${config.type}://${config.user}@${config.host}:${config.port}/${config.database}`;
-    const name = `${config.database} (${config.host})`;
-    saveConnection({ id, name, config });
+    doConnectAndSave(config);
+  }, [urlInput, doConnectAndSave]);
+
+  const handleSavedConnect = useCallback((conn: SavedConnection) => {
+    onConnect(conn.config);
+  }, [onConnect]);
+
+  const handleDeleteSaved = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    removeSavedConnection(id);
     setSavedList(loadSavedConnections());
-    onConnect(config);
-  }, [urlInput, onConnect]);
+  }, []);
 
   const handleBrowse = useCallback(async () => {
     try {
@@ -156,12 +180,7 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
     } catch { /* cancelled */ }
   }, []);
 
-  const handleSavedConnect = useCallback((conn: SavedConnection) => {
-    onConnect(conn.config);
-  }, [onConnect]);
-
-  const handleDeleteSaved = useCallback((id: string) => {
-    removeSavedConnection(id);
+  const refreshSaved = useCallback(() => {
     setSavedList(loadSavedConnections());
   }, []);
 
@@ -173,26 +192,46 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
           <button className="connection-close" onClick={onClose}>x</button>
         </div>
 
+        {/* Mode tabs */}
+        <div className="connection-mode-tabs">
+          <button className={mode === "saved" ? "active" : ""} onClick={() => { setMode("saved"); refreshSaved(); }}>
+            已保存{savedList.length > 0 ? ` (${savedList.length})` : ""}
+          </button>
+          <button className={mode === "url" ? "active" : ""} onClick={() => setMode("url")}>URL 连接</button>
+          <button className={mode === "form" ? "active" : ""} onClick={() => setMode("form")}>新建连接</button>
+        </div>
+
         {/* Saved connections */}
-        {savedList.length > 0 && (
-          <div className="saved-connections">
-            <div className="saved-header">已保存的连接</div>
-            {savedList.map((conn) => (
-              <div key={conn.id} className="saved-item">
-                <span className="saved-type">{conn.config.type === "sqlite" ? "SQLite" : conn.config.type === "postgresql" ? "PG" : "MY"}</span>
-                <span className="saved-name" onClick={() => handleSavedConnect(conn)}>{conn.name}</span>
-                <button className="saved-delete" onClick={() => handleDeleteSaved(conn.id)}>删除</button>
+        {mode === "saved" && (
+          <div className="connection-body">
+            {savedList.length === 0 ? (
+              <div className="saved-empty">暂无已保存的连接，请通过 URL 或表单新建。</div>
+            ) : (
+              <div className="saved-list">
+                {savedList.map((conn) => (
+                  <div key={conn.id} className="saved-item" onClick={() => handleSavedConnect(conn)}>
+                    <span className={`saved-type type-${conn.config.type}`}>
+                      {conn.config.type === "sqlite" ? "SQLite" : conn.config.type === "postgresql" ? "PG" : "MY"}
+                    </span>
+                    <div className="saved-info">
+                      <span className="saved-name">{conn.name}</span>
+                      <span className="saved-detail">
+                        {conn.config.type === "sqlite"
+                          ? conn.config.path
+                          : conn.config.type === "postgresql"
+                            ? `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`
+                            : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`}
+                      </span>
+                    </div>
+                    <button className="saved-delete" onClick={(e) => handleDeleteSaved(conn.id, e)}>删除</button>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 
-        {/* Mode tabs: URL / Form */}
-        <div className="connection-mode-tabs">
-          <button className={mode === "url" ? "active" : ""} onClick={() => setMode("url")}>URL 快速连接</button>
-          <button className={mode === "form" ? "active" : ""} onClick={() => setMode("form")}>表单连接</button>
-        </div>
-
+        {/* URL mode */}
         {mode === "url" && (
           <div className="connection-body">
             <div className="form-group">
@@ -205,15 +244,25 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
                 spellCheck={false}
               />
             </div>
+            <div className="form-group">
+              <label>别名（可选）</label>
+              <input
+                type="text"
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                placeholder="例如：生产环境、测试库"
+              />
+            </div>
             {urlError && <div className="connection-error">{urlError}</div>}
             <div className="connection-actions">
               <button className="btn-dialog btn-connect-dialog" onClick={handleUrlConnect} disabled={!urlInput.trim()}>
-                连接
+                连接并保存
               </button>
             </div>
           </div>
         )}
 
+        {/* Form mode */}
         {mode === "form" && (
           <>
             <div className="connection-tabs">
@@ -229,6 +278,16 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
             </div>
 
             <div className="connection-body">
+              <div className="form-group">
+                <label>别名（可选）</label>
+                <input
+                  type="text"
+                  value={alias}
+                  onChange={(e) => setAlias(e.target.value)}
+                  placeholder="例如：生产环境、测试库"
+                />
+              </div>
+
               {activeTab === "sqlite" && (
                 <div className="sqlite-file-row">
                   <div className="form-group">
@@ -279,8 +338,8 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
               <button className="btn-dialog btn-test" onClick={handleTest} disabled={testing}>
                 {testing ? "测试中..." : "测试连接"}
               </button>
-              <button className="btn-dialog btn-connect-dialog" onClick={handleConnect} disabled={!buildConfig()}>
-                连接
+              <button className="btn-dialog btn-connect-dialog" onClick={handleFormConnect} disabled={!buildConfig()}>
+                连接并保存
               </button>
             </div>
           </>

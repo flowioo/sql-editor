@@ -219,13 +219,17 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  margin-bottom: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
 }
 
 .saved-item:hover {
-  background: #2e3144;
+  background: #252840;
+  border-color: #3e4156;
 }
 
 .saved-type {
@@ -238,18 +242,52 @@
   flex-shrink: 0;
 }
 
-.saved-name {
+.type-postgresql {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
+}
+
+.type-mysql {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.saved-info {
   flex: 1;
+  min-width: 0;
+}
+
+.saved-name {
+  display: block;
   font-size: 13px;
+  font-weight: 500;
   color: #e1e4ed;
-  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.saved-name:hover {
-  color: #7c6aef;
+.saved-detail {
+  display: block;
+  font-size: 11px;
+  color: #5c6072;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.saved-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: #5c6072;
+  font-size: 13px;
 }
 
 .saved-delete {

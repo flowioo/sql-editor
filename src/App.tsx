@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { TabBar } from "./components/TabBar";
@@ -6,6 +6,7 @@ import { SQLEditor } from "./editor/SQLEditor";
 import { StatusBar } from "./components/StatusBar";
 import { ResultGrid } from "./components/ResultGrid";
 import { ConnectionDialog } from "./components/ConnectionDialog";
+import { AIPanel } from "./components/AIPanel";
 import { useTabStore } from "./hooks/useTabStore";
 import { useConnection } from "./hooks/useConnection";
 import { useSchema } from "./hooks/useSchema";
@@ -24,6 +25,7 @@ export default function App() {
   const [vimMode, setVimMode] = useState<VimMode>("normal");
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
+  const [showAI, setShowAI] = useState(false);
 
   const {
     status: connStatus,
@@ -94,21 +96,19 @@ export default function App() {
     [activeTabId, updateTabContent],
   );
 
-  const handleRun = useCallback(() => {
+  const handleRun = useCallback((sql: string) => {
     if (connStatus !== "connected") return;
-    const sql = activeTab?.content;
-    if (sql) {
-      executeQuery(sql).then((queryResult) => {
-        addEntry({
-          sql,
-          executedAt: new Date().toISOString(),
-          databaseName: displayName,
-          rowCount: queryResult?.rows.length ?? null,
-          error: queryError,
-        });
+    if (!sql.trim()) return;
+    executeQuery(sql).then((queryResult) => {
+      addEntry({
+        sql,
+        executedAt: new Date().toISOString(),
+        databaseName: displayName,
+        rowCount: queryResult?.rows.length ?? null,
+        error: queryError,
       });
-    }
-  }, [connStatus, activeTab?.content, executeQuery, addEntry, displayName, queryError]);
+    });
+  }, [connStatus, executeQuery, addEntry, displayName, queryError]);
 
   const handleConnectionDialogConnect = useCallback(
     async (config: ConnectionConfig) => {
@@ -138,6 +138,25 @@ export default function App() {
     [activeTabId, updateTabContent, executeQuery],
   );
 
+  const handleInsertSQL = useCallback(
+    (sql: string) => {
+      if (activeTabId) {
+        updateTabContent(activeTabId, sql);
+      }
+    },
+    [activeTabId, updateTabContent],
+  );
+
+  const schemaContext = useMemo(() => {
+    if (!schema) return "";
+    return schema.tables
+      .map((t) => {
+        const cols = t.columns.map((c) => `  ${c.name} ${c.data_type}${c.is_primary_key ? " PK" : ""}`).join("\n");
+        return `TABLE ${t.name} (\n${cols}\n)`;
+      })
+      .join("\n\n");
+  }, [schema]);
+
   return (
     <div className="app">
       <Sidebar
@@ -160,9 +179,11 @@ export default function App() {
           scanResult={scanResult}
           onConnect={() => setShowConnectionDialog(true)}
           onDisconnect={doDisconnect}
-          onRun={handleRun}
+          onRun={() => handleRun(activeTab?.content ?? "")}
           onRefreshSchema={refreshSchema}
           onScanCodebase={scanCodebase}
+          onToggleAI={() => setShowAI(!showAI)}
+          showAI={showAI}
         />
         <TabBar
           tabs={tabs}
@@ -198,6 +219,14 @@ export default function App() {
           cursorCol={cursorPos.col}
         />
       </div>
+
+      {showAI && (
+        <AIPanel
+          schemaContext={schemaContext}
+          connectionName={displayName}
+          onInsertSQL={handleInsertSQL}
+        />
+      )}
 
       {showConnectionDialog && (
         <ConnectionDialog

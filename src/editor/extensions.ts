@@ -94,11 +94,12 @@ export function updateSchemaForAutocomplete(schema: DatabaseSchema): void {
   setSchema(schema);
 }
 
-export function setupVimLeaderMappings(view: EditorView): void {
+export function setupVimLeaderMappings(_view: EditorView): void {
   try {
-    Vim.map("<leader>rs", "<refresh-schema>", "normal");
-    Vim.handleKey("<refresh-schema>", "", "normal", () => {
-      schemaRefreshCallback?.();
+    Vim.mapCommand("<leader>rs", "action", "refreshSchema", {}, {
+      callback: () => {
+        schemaRefreshCallback?.();
+      },
     });
   } catch {
     // vim extension may not be ready yet, safe to ignore

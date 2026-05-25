@@ -14,6 +14,8 @@ interface ToolbarProps {
   readonly onRun: () => void;
   readonly onRefreshSchema: () => void;
   readonly onScanCodebase: () => void;
+  readonly onToggleAI: () => void;
+  readonly showAI: boolean;
 }
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
@@ -34,6 +36,8 @@ export function Toolbar({
   onRun,
   onRefreshSchema,
   onScanCodebase,
+  onToggleAI,
+  showAI,
 }: ToolbarProps) {
   return (
     <div className="toolbar">
@@ -88,6 +92,14 @@ export function Toolbar({
       )}
 
       <div className="spacer" />
+
+      <button
+        className={`btn btn-secondary ${showAI ? "active" : ""}`}
+        onClick={onToggleAI}
+        title="AI 助手"
+      >
+        <span>AI</span>
+      </button>
 
       {connectionStatus === "connected" && (
         <span className="toolbar-status">{STATUS_LABELS[connectionStatus]}</span>

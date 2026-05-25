@@ -12,7 +12,7 @@ interface SQLEditorProps {
   readonly onContentChange?: (content: string) => void;
   readonly onVimModeChange?: (mode: VimMode) => void;
   readonly onCursorChange?: (line: number, col: number) => void;
-  readonly onRun?: () => void;
+  readonly onRun?: (sql: string) => void;
 }
 
 function getVimModeFromView(view: EditorView): VimMode {
@@ -27,6 +27,57 @@ function getVimModeFromView(view: EditorView): VimMode {
     // ignore
   }
   return "normal";
+}
+
+/**
+ * Get the SQL to execute:
+ * 1. If there's a selection, use it
+ * 2. Otherwise find the current statement (text between empty lines or ; boundaries)
+ */
+function getSQLToRun(view: EditorView): string {
+  const sel = view.state.selection.main;
+
+  // If there's an actual selection (not just a cursor), use it
+  if (sel.from !== sel.to) {
+    return view.state.sliceDoc(sel.from, sel.to).trim();
+  }
+
+  // No selection — find the current statement
+  const doc = view.state.doc;
+  const cursorPos = sel.head;
+  const currentLine = doc.lineAt(cursorPos);
+
+  // Scan backwards to find statement start (empty line or beginning of doc)
+  let startLine = currentLine.number;
+  while (startLine > 1) {
+    const prevLine = doc.line(startLine - 1);
+    if (prevLine.text.trim() === "") break;
+    // Check if previous line ends with ;
+    if (prevLine.text.trimEnd().endsWith(";") && startLine !== currentLine.number) break;
+    startLine--;
+  }
+
+  // Scan forwards to find statement end (empty line or ; or end of doc)
+  let endLine = currentLine.number;
+  while (endLine < doc.lines) {
+    const line = doc.line(endLine);
+    if (line.text.trimEnd().endsWith(";")) break;
+    const nextLine = doc.line(endLine + 1);
+    if (nextLine.text.trim() === "") break;
+    endLine++;
+  }
+  // Include the last line even if it doesn't end with ;
+  if (endLine < doc.lines && !doc.line(endLine).text.trimEnd().endsWith(";")) {
+    // Check one more line
+    const lastLineText = doc.line(endLine).text.trimEnd();
+    if (!lastLineText.endsWith(";")) {
+      // Already at a natural boundary
+    }
+  }
+
+  const from = doc.line(startLine).from;
+  const to = doc.line(endLine).to;
+  return view.state.sliceDoc(from, to).trim();
 }
 
 export function SQLEditor({
@@ -71,15 +122,9 @@ export function SQLEditor({
     const runKeymap = keymap.of([
       {
         key: "F5",
-        run: () => {
-          onRunRef.current?.();
-          return true;
-        },
-      },
-      {
-        key: "Ctrl-Enter",
-        run: () => {
-          onRunRef.current?.();
+        run: (view) => {
+          const sql = getSQLToRun(view);
+          if (sql) onRunRef.current?.(sql);
           return true;
         },
       },
@@ -124,10 +169,10 @@ export function SQLEditor({
           <span className={`vim-mode ${getVimModeClass(vimMode)}`}>
             {getVimModeLabel(vimMode)}
           </span>
-          <span className="vim-mode-text">— Vim 模式已启用</span>
+          <span className="vim-mode-text">— F5 执行选中或当前语句</span>
         </div>
         <div className="cursor-info">
-          行 {cursorPos.line}，列 {cursorPos.col}
+          Ln {cursorPos.line}, Col {cursorPos.col}
         </div>
       </div>
       <div ref={containerRef} className="editor-body" />

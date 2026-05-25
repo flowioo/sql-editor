@@ -30,7 +30,7 @@ const INITIAL_TABS: readonly QueryTab[] = [
 interface UseTabStoreReturn {
   readonly tabs: readonly QueryTab[];
   readonly activeTabId: string;
-  readonly addTab: () => void;
+  readonly addTab: (initialContent?: string) => string;
   readonly removeTab: (id: string) => void;
   readonly setActiveTab: (id: string) => void;
   readonly updateTabContent: (id: string, content: string) => void;
@@ -40,15 +40,16 @@ export function useTabStore(): UseTabStoreReturn {
   const [tabs, setTabs] = useState<readonly QueryTab[]>(INITIAL_TABS);
   const [activeTabId, setActiveTabId] = useState("1");
 
-  const addTab = useCallback(() => {
+  const addTab = useCallback((initialContent?: string) => {
     const id = String(nextTabId++);
     const newTab: QueryTab = {
       id,
       title: `查询 ${id}`,
-      content: "-- 新查询\n",
+      content: initialContent ?? "-- 新查询\n",
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(id);
+    return id;
   }, []);
 
   const removeTab = useCallback((id: string) => {

@@ -56,6 +56,9 @@ pub fn run() {
             commands::schema::diff_schema,
             commands::schema::scan_codebase,
             commands::schema::get_column_descriptions,
+            commands::files::save_query_file,
+            commands::files::read_query_file,
+            commands::files::list_query_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

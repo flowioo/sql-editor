@@ -1,10 +1,10 @@
 import { useState } from "react";
 import type { DatabaseSchema } from "../hooks/useSchema";
-import type { QueryHistoryEntry } from "../hooks/useQueryHistory";
+import type { QueryHistoryEntry, QueryFileInfo } from "../hooks/useQueryHistory";
 import { SchemaTree } from "./SchemaTree";
 import "../styles/sidebar.css";
 
-type SidebarTabKey = "connections" | "schema" | "history";
+type SidebarTabKey = "connections" | "schema" | "history" | "files";
 
 interface SidebarProps {
   readonly schema: DatabaseSchema | null;
@@ -12,7 +12,9 @@ interface SidebarProps {
   readonly offline: boolean;
   readonly descriptions: ReadonlyMap<string, string>;
   readonly history: readonly QueryHistoryEntry[];
+  readonly savedFiles: readonly QueryFileInfo[];
   readonly onHistorySelect: (sql: string) => void;
+  readonly onFileOpen: (filename: string) => void;
   readonly onClearHistory: () => void;
   readonly onTableSelect?: (tableName: string) => void;
 }
@@ -21,6 +23,7 @@ const TAB_LABELS: Record<SidebarTabKey, string> = {
   connections: "连接",
   schema: "数据库",
   history: "历史",
+  files: "文件",
 };
 
 export function Sidebar({
@@ -29,7 +32,9 @@ export function Sidebar({
   offline,
   descriptions,
   history,
+  savedFiles,
   onHistorySelect,
+  onFileOpen,
   onClearHistory,
   onTableSelect,
 }: SidebarProps) {
@@ -95,6 +100,29 @@ export function Sidebar({
             )}
           </div>
         )}
+
+        {activeTab === "files" && (
+          <div className="history-list">
+            {savedFiles.length === 0 ? (
+              <div className="sidebar-placeholder">
+                执行查询后自动保存为 .sql 文件
+              </div>
+            ) : (
+              <>
+                <div className="history-header">
+                  <span>{savedFiles.length} 个文件</span>
+                </div>
+                {savedFiles.map((file) => (
+                  <FileItem
+                    key={file.filename}
+                    file={file}
+                    onClick={() => onFileOpen(file.filename)}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -125,6 +153,28 @@ function HistoryItem({
   );
 }
 
+function FileItem({
+  file,
+  onClick,
+}: {
+  readonly file: QueryFileInfo;
+  readonly onClick: () => void;
+}) {
+  const timeStr = formatTimeMs(file.modified);
+  const displayName = file.filename.replace(/^\d{8}_\d{6}_/, "").replace(/\.sql$/, "");
+  const sizeStr = file.size > 1024 ? `${(file.size / 1024).toFixed(1)}K` : `${file.size}B`;
+
+  return (
+    <button className="history-item file-item" onClick={onClick}>
+      <div className="history-item-preview">{displayName || file.filename}</div>
+      <div className="history-item-meta">
+        <span>{timeStr}</span>
+        <span className="history-status ok">{sizeStr}</span>
+      </div>
+    </button>
+  );
+}
+
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso);
@@ -136,5 +186,19 @@ function formatTime(iso: string): string {
     });
   } catch {
     return iso;
+  }
+}
+
+function formatTimeMs(ms: number): string {
+  try {
+    const d = new Date(ms);
+    return d.toLocaleString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(ms);
   }
 }

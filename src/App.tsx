@@ -48,7 +48,7 @@ export default function App() {
     error: queryError,
     execute: executeQuery,
   } = useQuery();
-  const { history, addEntry, clearHistory } = useQueryHistory();
+  const { history, savedFiles, addEntry, clearHistory, loadFileContent } = useQueryHistory();
   const {
     scanning,
     scanResult,
@@ -147,6 +147,19 @@ export default function App() {
     [activeTabId, updateTabContent],
   );
 
+  const handleFileOpen = useCallback(
+    async (filename: string) => {
+      try {
+        const content = await loadFileContent(filename);
+        const tabTitle = filename.replace(/^\d{8}_\d{6}_/, "").replace(/\.sql$/, "");
+        addTab(`-- ${tabTitle}\n${content}`);
+      } catch (e) {
+        console.error("Failed to load file:", e);
+      }
+    },
+    [loadFileContent, addTab],
+  );
+
   const schemaContext = useMemo(() => {
     if (!schema) return "";
     return schema.tables
@@ -165,7 +178,9 @@ export default function App() {
         offline={offline}
         descriptions={descriptions}
         history={history}
+        savedFiles={savedFiles}
         onHistorySelect={handleHistorySelect}
+        onFileOpen={handleFileOpen}
         onClearHistory={clearHistory}
         onTableSelect={handleTableSelect}
       />

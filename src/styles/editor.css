@@ -7,10 +7,16 @@
 }
 
 .editor-container {
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 200px;
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-body {
+  flex: 1;
   overflow: hidden;
 }
 

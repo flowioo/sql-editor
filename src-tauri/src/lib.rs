@@ -1,6 +1,6 @@
-use std::sync::{Mutex, Arc};
+use std::sync::Mutex;
 use tauri::Manager;
-use db::DatabaseDriver;
+use db::Driver;
 use schema::cache::SchemaCache;
 
 mod commands;
@@ -8,7 +8,7 @@ mod db;
 mod schema;
 
 pub struct InnerState {
-    pub driver: Option<Arc<dyn DatabaseDriver>>,
+    pub driver: Option<Driver>,
     pub schema_cache: SchemaCache,
     pub current_connection_key: Option<String>,
 }

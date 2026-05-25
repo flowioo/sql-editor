@@ -5,15 +5,17 @@ use crate::schema::scanner::{self, ColumnDescription, ScanResult};
 use crate::schema::persist;
 
 #[tauri::command]
-pub fn refresh_schema(state: State<'_, AppState>) -> Result<DatabaseSchema, String> {
-    let (driver, key) = {
+pub async fn refresh_schema(state: State<'_, AppState>) -> Result<DatabaseSchema, String> {
+    let driver = {
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
-        let driver = inner.driver.clone().ok_or("未连接到数据库".to_string())?;
-        let key = inner.current_connection_key.clone().ok_or("未连接到数据库".to_string())?;
-        (driver, key)
+        inner.driver.clone().ok_or("未连接到数据库".to_string())?
+    };
+    let key = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.current_connection_key.clone().ok_or("未连接到数据库".to_string())?
     };
 
-    let schema = driver.get_schema()?;
+    let schema = driver.get_schema().await?;
 
     persist::save_schema(&state.cache_db_path, &key, &schema)?;
 
@@ -48,18 +50,24 @@ pub fn get_cached_schema(state: State<'_, AppState>) -> Result<Option<DatabaseSc
     Ok(schema)
 }
 
-/// Diff remote schema with cached schema. Returns (has_changes, current_schema).
-/// If no cached schema exists, always returns (true, remote_schema).
+#[derive(serde::Serialize)]
+pub struct SchemaDiffResult {
+    pub has_changes: bool,
+    pub schema: DatabaseSchema,
+}
+
 #[tauri::command]
-pub fn diff_schema(state: State<'_, AppState>) -> Result<SchemaDiffResult, String> {
-    let (driver, key) = {
+pub async fn diff_schema(state: State<'_, AppState>) -> Result<SchemaDiffResult, String> {
+    let driver = {
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
-        let driver = inner.driver.clone().ok_or("未连接到数据库".to_string())?;
-        let key = inner.current_connection_key.clone().ok_or("未连接到数据库".to_string())?;
-        (driver, key)
+        inner.driver.clone().ok_or("未连接到数据库".to_string())?
+    };
+    let key = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.current_connection_key.clone().ok_or("未连接到数据库".to_string())?
     };
 
-    let remote_schema = driver.get_schema()?;
+    let remote_schema = driver.get_schema().await?;
     let cached_schema = persist::load_schema(&state.cache_db_path, &key)?;
 
     let has_changes = match &cached_schema {
@@ -77,12 +85,6 @@ pub fn diff_schema(state: State<'_, AppState>) -> Result<SchemaDiffResult, Strin
         has_changes,
         schema: remote_schema,
     })
-}
-
-#[derive(serde::Serialize)]
-pub struct SchemaDiffResult {
-    pub has_changes: bool,
-    pub schema: DatabaseSchema,
 }
 
 fn schema_changed(cached: &DatabaseSchema, remote: &DatabaseSchema) -> bool {

@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use sqlx::PgPool;
 use sqlx::postgres::PgRow;
 use sqlx::{Row as SqlxRow, Column as SqlxColumn};
-use crate::db::{DatabaseDriver, QueryResult};
+use crate::db::QueryResult;
 use crate::schema::{DatabaseSchema, Table, Column};
 
 const MAX_ROWS: usize = 10_000;
@@ -43,15 +43,6 @@ impl PostgresDriver {
 
     pub fn connection_key(&self) -> &str {
         &self.conn_key
-    }
-
-    fn with_pool<F, R>(&self, f: F) -> Result<R, String>
-    where
-        F: FnOnce(&PgPool) -> R,
-    {
-        let guard = self.pool.lock().map_err(|e| e.to_string())?;
-        let pool = guard.as_ref().ok_or("连接已关闭".to_string())?;
-        Ok(f(pool))
     }
 }
 
@@ -182,24 +173,24 @@ async fn get_schema_async(pool: &PgPool, conn_key: &str) -> Result<DatabaseSchem
     })
 }
 
-impl DatabaseDriver for PostgresDriver {
-    fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
-        self.with_pool(|pool| {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-            rt.block_on(execute_query_async(pool, sql))
-        })?
+impl PostgresDriver {
+    pub async fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
+        let pool = {
+            let guard = self.pool.lock().map_err(|e| e.to_string())?;
+            guard.as_ref().cloned().ok_or("连接已关闭".to_string())?
+        };
+        execute_query_async(&pool, sql).await
     }
 
-    fn get_schema(&self) -> Result<DatabaseSchema, String> {
-        let conn_key = self.conn_key.clone();
-        self.with_pool(|pool| {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-            rt.block_on(get_schema_async(pool, &conn_key))
-        })?
+    pub async fn get_schema(&self) -> Result<DatabaseSchema, String> {
+        let pool = {
+            let guard = self.pool.lock().map_err(|e| e.to_string())?;
+            guard.as_ref().cloned().ok_or("连接已关闭".to_string())?
+        };
+        get_schema_async(&pool, &self.conn_key).await
     }
 
-    fn test_connection(&self) -> Result<(), String> {
-        // Already tested during new()
+    pub fn test_connection(&self) -> Result<(), String> {
         Ok(())
     }
 }

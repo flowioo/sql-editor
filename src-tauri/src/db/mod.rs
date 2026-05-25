@@ -4,6 +4,7 @@ pub mod mysql;
 
 use serde::{Serialize, Deserialize};
 use crate::schema::DatabaseSchema;
+use std::sync::Arc;
 
 #[derive(Serialize, Clone)]
 pub struct QueryResult {
@@ -42,10 +43,10 @@ impl ConnectionConfig {
         match self {
             Self::Sqlite { path } => path.clone(),
             Self::Postgresql { host, port, user, database, .. } => {
-                format!("postgresql://{}@{}:{}/{}", user, host, port, database)
+                format!("postgresql://{}@{}:{}:{}/{}", user, host, port, "***", database)
             }
             Self::Mysql { host, port, user, database, .. } => {
-                format!("mysql://{}@{}:{}/{}", user, host, port, database)
+                format!("mysql://{}@{}:{}:{}/{}", user, host, port, "***", database)
             }
         }
     }
@@ -67,42 +68,30 @@ impl ConnectionConfig {
             }
         }
     }
+}
 
-    pub fn db_type_label(&self) -> &'static str {
+/// Enum dispatcher — avoids sync trait + async runtime conflicts
+#[derive(Clone)]
+pub enum Driver {
+    Sqlite(Arc<sqlite::SqliteDriver>),
+    Postgres(Arc<postgres::PostgresDriver>),
+    MySql(Arc<mysql::MySqlDriver>),
+}
+
+impl Driver {
+    pub async fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
         match self {
-            Self::Sqlite { .. } => "SQLite",
-            Self::Postgresql { .. } => "PostgreSQL",
-            Self::Mysql { .. } => "MySQL",
+            Driver::Sqlite(d) => d.execute_query(sql),
+            Driver::Postgres(d) => d.execute_query(sql).await,
+            Driver::MySql(d) => d.execute_query(sql).await,
         }
     }
-}
 
-// Event payloads for streaming query results
-
-#[derive(Serialize, Clone)]
-pub struct QueryBatchEvent {
-    pub query_id: String,
-    pub columns: Vec<String>,
-    pub rows: Vec<Vec<Option<String>>>,
-    pub batch_index: u32,
-}
-
-#[derive(Serialize, Clone)]
-pub struct QueryCompleteEvent {
-    pub query_id: String,
-    pub total_rows: u64,
-    pub affected_rows: u64,
-    pub truncated: bool,
-}
-
-#[derive(Serialize, Clone)]
-pub struct QueryErrorEvent {
-    pub query_id: String,
-    pub error: String,
-}
-
-pub trait DatabaseDriver: Send + Sync {
-    fn execute_query(&self, sql: &str) -> Result<QueryResult, String>;
-    fn get_schema(&self) -> Result<DatabaseSchema, String>;
-    fn test_connection(&self) -> Result<(), String>;
+    pub async fn get_schema(&self) -> Result<DatabaseSchema, String> {
+        match self {
+            Driver::Sqlite(d) => d.get_schema(),
+            Driver::Postgres(d) => d.get_schema().await,
+            Driver::MySql(d) => d.get_schema().await,
+        }
+    }
 }

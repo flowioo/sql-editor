@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use rusqlite::{Connection, params};
 use rusqlite::types::ValueRef;
-use crate::db::{DatabaseDriver, QueryResult};
+use crate::db::QueryResult;
 use crate::schema::introspect;
 
 const MAX_ROWS: usize = 10_000;
@@ -33,8 +33,8 @@ fn value_to_string(val: ValueRef<'_>) -> Option<String> {
     }
 }
 
-impl DatabaseDriver for SqliteDriver {
-    fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
+impl SqliteDriver {
+    pub fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
 
         // Try as a SELECT/PRAGMA query first
@@ -89,12 +89,12 @@ impl DatabaseDriver for SqliteDriver {
         })
     }
 
-    fn get_schema(&self) -> Result<crate::schema::DatabaseSchema, String> {
+    pub fn get_schema(&self) -> Result<crate::schema::DatabaseSchema, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         introspect::introspect_sqlite(&conn, &self.path)
     }
 
-    fn test_connection(&self) -> Result<(), String> {
+    pub fn test_connection(&self) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute_batch("SELECT 1")
             .map_err(|e| format!("连接测试失败: {}", e))?;

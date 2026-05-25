@@ -14,6 +14,7 @@ interface SidebarProps {
   readonly history: readonly QueryHistoryEntry[];
   readonly onHistorySelect: (sql: string) => void;
   readonly onClearHistory: () => void;
+  readonly onTableSelect?: (tableName: string) => void;
 }
 
 const TAB_LABELS: Record<SidebarTabKey, string> = {
@@ -30,6 +31,7 @@ export function Sidebar({
   history,
   onHistorySelect,
   onClearHistory,
+  onTableSelect,
 }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTabKey>("schema");
 
@@ -64,7 +66,7 @@ export function Sidebar({
                 {offline && <span className="offline-badge">离线</span>}
               </div>
             )}
-            <SchemaTree schema={schema} descriptions={descriptions} />
+            <SchemaTree schema={schema} descriptions={descriptions} onTableSelect={onTableSelect} />
           </>
         )}
 

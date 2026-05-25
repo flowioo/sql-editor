@@ -5,9 +5,12 @@ import "../styles/schema-tree.css";
 interface SchemaTreeProps {
   readonly schema: DatabaseSchema | null;
   readonly descriptions: ReadonlyMap<string, string>;
+  readonly onTableSelect?: (tableName: string) => void;
 }
 
-export function SchemaTree({ schema, descriptions }: SchemaTreeProps) {
+export function SchemaTree({ schema, descriptions, onTableSelect }: SchemaTreeProps) {
+  const [filter, setFilter] = useState("");
+
   if (!schema) {
     return (
       <div className="sidebar-placeholder">
@@ -16,20 +19,41 @@ export function SchemaTree({ schema, descriptions }: SchemaTreeProps) {
     );
   }
 
+  const tables = filter
+    ? schema.tables.filter((t) =>
+        t.name.toLowerCase().includes(filter.toLowerCase())
+      )
+    : schema.tables;
+
   return (
     <div className="schema-tree">
+      <div className="schema-search">
+        <input
+          type="text"
+          className="schema-filter"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="过滤表名..."
+          spellCheck={false}
+        />
+        {filter && (
+          <button className="schema-filter-clear" onClick={() => setFilter("")}>x</button>
+        )}
+      </div>
+
       <div className="schema-db-header">
         <span className="schema-db-icon">⛁</span>
         <span className="schema-db-name">{schema.database_name}</span>
         <span className="schema-table-count">
-          {schema.tables.length} 表
+          {filter ? `${tables.length}/${schema.tables.length}` : `${schema.tables.length}`} 表
         </span>
       </div>
-      {schema.tables.map((table) => (
+      {tables.map((table) => (
         <TableNode
           key={table.name}
           table={table}
           descriptions={descriptions}
+          onTableSelect={onTableSelect}
         />
       ))}
     </div>
@@ -47,16 +71,23 @@ interface TableNodeProps {
     }[];
   };
   readonly descriptions: ReadonlyMap<string, string>;
+  readonly onTableSelect?: (tableName: string) => void;
 }
 
-function TableNode({ table, descriptions }: TableNodeProps) {
+function TableNode({ table, descriptions, onTableSelect }: TableNodeProps) {
   const [expanded, setExpanded] = useState(false);
+
+  const handleDoubleClick = () => {
+    onTableSelect?.(table.name);
+  };
 
   return (
     <div className="schema-table">
       <button
         className="schema-table-header"
         onClick={() => setExpanded((prev) => !prev)}
+        onDoubleClick={handleDoubleClick}
+        title="单击展开/收起，双击查询 SELECT * FROM"
       >
         <span className={`schema-arrow ${expanded ? "expanded" : ""}`}>
           ▸

@@ -127,6 +127,17 @@ export default function App() {
     [activeTabId, updateTabContent],
   );
 
+  const handleTableSelect = useCallback(
+    (tableName: string) => {
+      const sql = `SELECT * FROM ${tableName} LIMIT 100;`;
+      if (activeTabId) {
+        updateTabContent(activeTabId, sql);
+      }
+      executeQuery(sql);
+    },
+    [activeTabId, updateTabContent, executeQuery],
+  );
+
   return (
     <div className="app">
       <Sidebar
@@ -137,6 +148,7 @@ export default function App() {
         history={history}
         onHistorySelect={handleHistorySelect}
         onClearHistory={clearHistory}
+        onTableSelect={handleTableSelect}
       />
       <div className="editor-area">
         <Toolbar

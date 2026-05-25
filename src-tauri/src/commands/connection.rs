@@ -4,7 +4,7 @@ use crate::AppState;
 use crate::db::sqlite::SqliteDriver;
 use crate::db::postgres::PostgresDriver;
 use crate::db::mysql::MySqlDriver;
-use crate::db::{ConnectionConfig, DatabaseDriver};
+use crate::db::{ConnectionConfig, Driver};
 use crate::schema::persist;
 
 #[tauri::command]
@@ -15,20 +15,19 @@ pub async fn connect(
     let conn_key = config.connection_key();
     let display_name = config.display_name();
 
-    // Create and test driver
-    let driver: Arc<dyn DatabaseDriver> = match &config {
+    let driver: Driver = match &config {
         ConnectionConfig::Sqlite { path } => {
             let d = SqliteDriver::new(path)?;
             d.test_connection()?;
-            Arc::new(d)
+            Driver::Sqlite(Arc::new(d))
         }
         ConnectionConfig::Postgresql { host, port, user, password, database, url } => {
             let d = PostgresDriver::new(host, *port, user, password, database, url.as_deref()).await?;
-            Arc::new(d)
+            Driver::Postgres(Arc::new(d))
         }
         ConnectionConfig::Mysql { host, port, user, password, database, url } => {
             let d = MySqlDriver::new(host, *port, user, password, database, url.as_deref()).await?;
-            Arc::new(d)
+            Driver::MySql(Arc::new(d))
         }
     };
 
@@ -61,7 +60,7 @@ pub fn connect_sqlite(path: String, state: State<'_, AppState>) -> Result<String
     let cached_schema = persist::load_schema(&state.cache_db_path, &path)?;
 
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.driver = Some(std::sync::Arc::new(driver));
+    inner.driver = Some(Driver::Sqlite(Arc::new(driver)));
     inner.current_connection_key = Some(path.clone());
     if let Some(s) = cached_schema {
         inner.schema_cache.set(path, s);

@@ -96,3 +96,12 @@
 .cm-editor .cm-activeLine {
   background: rgba(124, 106, 239, 0.05);
 }
+
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground {
+  background: rgba(59, 130, 246, 0.35) !important;
+}
+
+.cm-editor .cm-selectionMatch {
+  background: rgba(59, 130, 246, 0.2);
+}

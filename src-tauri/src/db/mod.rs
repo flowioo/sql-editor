@@ -5,6 +5,7 @@ pub mod mysql;
 use serde::{Serialize, Deserialize};
 use crate::schema::DatabaseSchema;
 use std::sync::Arc;
+use std::time::Instant;
 
 #[derive(Serialize, Clone)]
 pub struct QueryResult {
@@ -12,6 +13,26 @@ pub struct QueryResult {
     pub rows: Vec<Vec<Option<String>>>,
     pub affected_rows: u64,
     pub truncated: bool,
+}
+
+/// Single statement execution result.
+/// Used for multi-statement execution — each statement gets one of these.
+#[derive(Serialize, Clone)]
+pub struct StatementResult {
+    pub sql: String,
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<Option<String>>>,
+    pub affected_rows: u64,
+    pub truncated: bool,
+    pub is_query: bool,
+    pub error: Option<String>,
+}
+
+/// Multi-statement execution result — a list of StatementResult.
+#[derive(Serialize, Clone)]
+pub struct MultiQueryResult {
+    pub results: Vec<StatementResult>,
+    pub total_duration_ms: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -94,4 +115,69 @@ impl Driver {
             Driver::MySql(d) => d.get_schema().await,
         }
     }
+
+    pub async fn execute_multi_query(&self, sql: &str) -> Result<MultiQueryResult, String> {
+        let statements = split_sql(sql);
+        let start = Instant::now();
+        let mut results = Vec::with_capacity(statements.len());
+
+        for stmt in &statements {
+            let result = match self {
+                Driver::Sqlite(d) => d.execute_single(stmt),
+                Driver::Postgres(d) => d.execute_single(stmt).await,
+                Driver::MySql(d) => d.execute_single(stmt).await,
+            };
+
+            match result {
+                Ok(sr) => results.push(sr),
+                Err(e) => results.push(StatementResult {
+                    sql: stmt.clone(),
+                    columns: vec![],
+                    rows: vec![],
+                    affected_rows: 0,
+                    truncated: false,
+                    is_query: false,
+                    error: Some(e),
+                }),
+            }
+        }
+
+        let total_duration_ms = start.elapsed().as_millis() as u64;
+        Ok(MultiQueryResult { results, total_duration_ms })
+    }
+}
+
+/// Split SQL text into individual statements by `;`.
+/// Handles string literals (single-quoted) to avoid splitting inside strings.
+/// Filters out empty statements and whitespace-only statements.
+pub fn split_sql(sql: &str) -> Vec<String> {
+    let mut statements = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut prev_char: Option<char> = None;
+
+    for ch in sql.chars() {
+        if ch == '\'' && prev_char != Some('\\') {
+            in_string = !in_string;
+        }
+
+        if ch == ';' && !in_string {
+            let trimmed = current.trim();
+            if !trimmed.is_empty() && !trimmed.starts_with("--") {
+                statements.push(trimmed.to_string());
+            }
+            current = String::new();
+        } else {
+            current.push(ch);
+        }
+        prev_char = Some(ch);
+    }
+
+    // Don't forget the last statement (no trailing semicolon)
+    let trimmed = current.trim();
+    if !trimmed.is_empty() && !trimmed.starts_with("--") {
+        statements.push(trimmed.to_string());
+    }
+
+    statements
 }

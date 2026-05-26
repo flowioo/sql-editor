@@ -4,3 +4,111 @@
   height: 100vh;
   overflow: hidden;
 }
+
+/* Result tabs header */
+.result-tabs-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.result-tabs-bar {
+  display: flex;
+  gap: 1px;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.result-tab {
+  padding: 6px 14px;
+  font-size: 0.76em;
+  background: transparent;
+  color: var(--text2);
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  font-family: var(--sans);
+}
+
+.result-tab:hover {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.result-tab-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.result-tabs-duration {
+  font-size: 0.7em;
+  color: var(--text3);
+  padding: 0 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Console messages area (terminal-style) */
+.console-messages {
+  background: #0a0b10;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.76em;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px 0;
+  flex-shrink: 0;
+}
+
+.console-entry {
+  padding: 3px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.console-entry + .console-entry {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  margin-top: 3px;
+  padding-top: 6px;
+}
+
+.console-sql {
+  color: var(--green);
+  word-break: break-all;
+}
+
+.console-result {
+  padding-left: 14px;
+}
+
+.console-success {
+  color: var(--green);
+}
+
+.console-error {
+  color: var(--red);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.console-error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--red);
+  color: #0a0b10;
+  font-size: 0.7em;
+  font-weight: 700;
+  flex-shrink: 0;
+}

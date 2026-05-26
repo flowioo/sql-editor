@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use sqlx::PgPool;
 use sqlx::postgres::PgRow;
 use sqlx::{Row as SqlxRow, Column as SqlxColumn};
-use crate::db::QueryResult;
+use crate::db::{QueryResult, StatementResult};
 use crate::schema::{DatabaseSchema, Table, Column};
 
 const MAX_ROWS: usize = 10_000;
@@ -233,5 +233,74 @@ impl PostgresDriver {
 
     pub fn test_connection(&self) -> Result<(), String> {
         Ok(())
+    }
+
+    pub async fn execute_single(&self, sql: &str) -> Result<StatementResult, String> {
+        let pool = {
+            let guard = self.pool.lock().map_err(|e| e.to_string())?;
+            guard.as_ref().cloned().ok_or("连接已关闭".to_string())?
+        };
+
+        // Try to fetch_all first (SELECT-like queries)
+        match sqlx::query(sql).fetch_all(&pool).await {
+            Ok(rows) => {
+                let columns: Vec<String> = if rows.is_empty() {
+                    vec![]
+                } else {
+                    rows[0].columns().iter().map(|c| c.name().to_string()).collect()
+                };
+
+                let column_count = columns.len();
+                let mut result_rows: Vec<Vec<Option<String>>> = Vec::new();
+                let mut truncated = false;
+
+                for row in &rows {
+                    if result_rows.len() >= MAX_ROWS {
+                        truncated = true;
+                        break;
+                    }
+                    let mut row_data: Vec<Option<String>> = Vec::with_capacity(column_count);
+                    for i in 0..column_count {
+                        let val: Option<String> = row.try_get(i)
+                            .ok()
+                            .or_else(|| row.try_get::<Option<&str>, _>(i).ok().flatten().map(|s| s.to_string()))
+                            .or_else(|| row.try_get::<Option<i64>, _>(i).ok().flatten().map(|n| n.to_string()))
+                            .or_else(|| row.try_get::<Option<f64>, _>(i).ok().flatten().map(|f| f.to_string()))
+                            .or_else(|| row.try_get::<Option<bool>, _>(i).ok().flatten().map(|b| b.to_string()));
+                        row_data.push(val);
+                    }
+                    result_rows.push(row_data);
+                }
+
+                let affected = result_rows.len() as u64;
+                Ok(StatementResult {
+                    sql: sql.to_string(),
+                    columns,
+                    rows: result_rows,
+                    affected_rows: affected,
+                    truncated,
+                    is_query: true,
+                    error: None,
+                })
+            }
+            Err(_) => {
+                // Fallback to execute (DML/DDL)
+                let result = sqlx::query(sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| format!("SQL 执行错误: {e}"))?;
+
+                let affected = result.rows_affected();
+                Ok(StatementResult {
+                    sql: sql.to_string(),
+                    columns: vec!["影响行数".to_string()],
+                    rows: vec![vec![Some(affected.to_string())]],
+                    affected_rows: affected,
+                    truncated: false,
+                    is_query: false,
+                    error: None,
+                })
+            }
+        }
     }
 }

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import type { QueryResult } from "../hooks/useQuery";
+import type { StatementResult } from "../hooks/useQuery";
 import "../styles/result-grid.css";
 
 interface ResultGridProps {
-  readonly result: QueryResult;
+  readonly result: StatementResult;
 }
 
 const ROW_HEIGHT = 28;
@@ -15,7 +15,7 @@ export function ResultGrid({ result }: ResultGridProps) {
   const totalHeight = useMemo(() => rows.length * ROW_HEIGHT, [rows.length]);
 
   return (
-    <div className="result-container">
+    <>
       <div className="result-header">
         <span className="result-count">
           {rows.length === affected_rows
@@ -64,7 +64,7 @@ export function ResultGrid({ result }: ResultGridProps) {
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 

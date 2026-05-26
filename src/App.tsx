@@ -4,7 +4,8 @@ import { Toolbar } from "./components/Toolbar";
 import { TabBar } from "./components/TabBar";
 import { SQLEditor } from "./editor/SQLEditor";
 import { StatusBar } from "./components/StatusBar";
-import { ResultGrid } from "./components/ResultGrid";
+import { ResultTabs } from "./components/ResultTabs";
+import { ConsoleMessages } from "./components/ConsoleMessages";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { AIPanel } from "./components/AIPanel";
 import { TableStructure } from "./components/TableStructure";
@@ -19,6 +20,7 @@ import { setSchemaRefreshCallback, updateSchemaForAutocomplete } from "./editor/
 import type { VimMode } from "./hooks/useVimMode";
 import type { ConnectionConfig } from "./types/connection";
 import "./styles/layout.css";
+import "./styles/result-tabs.css";
 
 export default function App() {
   const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent } =
@@ -102,11 +104,14 @@ export default function App() {
     if (connStatus !== "connected") return;
     if (!sql.trim()) return;
     executeQuery(sql).then((queryResult) => {
+      const rowCount = queryResult
+        ? queryResult.results.reduce((sum, r) => sum + (r.is_query ? r.rows.length : 0), 0)
+        : null;
       addEntry({
         sql,
         executedAt: new Date().toISOString(),
         databaseName: displayName,
-        rowCount: queryResult?.rows.length ?? null,
+        rowCount,
         error: queryError,
       });
     });
@@ -228,7 +233,15 @@ export default function App() {
           </div>
         )}
 
-        {result && <ResultGrid result={result} />}
+        {result && (
+          <>
+            <ResultTabs
+              results={result.results}
+              totalDurationMs={result.total_duration_ms}
+            />
+            <ConsoleMessages results={result.results} />
+          </>
+        )}
 
         {structureTable && schema && (() => {
           const table = schema.tables.find((t) => t.name === structureTable);

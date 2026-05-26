@@ -1,0 +1,100 @@
+/* Result tabs — multi-statement results */
+.result-tabs-header {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.result-tabs-bar {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.result-tab {
+  padding: 6px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text3);
+  font-family: var(--sans);
+  font-size: 0.75em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.result-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.result-tab-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.result-tabs-duration {
+  font-size: 0.72em;
+  color: var(--text3);
+  font-family: var(--mono);
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+/* Console messages — DML/DDL output */
+.console-messages {
+  border-top: 1px solid var(--border);
+  background: #12131f;
+  font-family: var(--mono);
+  font-size: 0.78em;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.console-entry {
+  padding: 6px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.console-sql {
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  flex-shrink: 0;
+}
+
+.console-result {
+  flex: 1;
+}
+
+.console-success {
+  color: var(--green);
+}
+
+.console-error {
+  color: #ef4444;
+}
+
+.console-error-icon {
+  display: inline-block;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 0.7em;
+  margin-right: 6px;
+}

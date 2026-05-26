@@ -227,7 +227,6 @@ export default function App() {
 
         {result && <ResultGrid result={result} />}
 
-        <div style={{ flex: 1 }} />
         <StatusBar
           vimMode={vimMode}
           cursorLine={cursorPos.line}

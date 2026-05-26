@@ -118,45 +118,55 @@ export function SQLEditor({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const container = containerRef.current;
 
-    const runKeymap = keymap.of([
-      {
-        key: "F5",
-        run: (view) => {
-          const sql = getSQLToRun(view);
-          if (sql) onRunRef.current?.(sql);
-          return true;
+    // Use rAF to ensure the container has been laid out with its final height
+    // before CM6 measures it. Without this, flex-based layouts may report 0.
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      if (cancelled || !container) return;
+
+      const runKeymap = keymap.of([
+        {
+          key: "F5",
+          run: (view) => {
+            const sql = getSQLToRun(view);
+            if (sql) onRunRef.current?.(sql);
+            return true;
+          },
         },
-      },
-    ]);
+      ]);
 
-    const onUpdate = EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
-        onContentChange?.(update.state.doc.toString());
-      }
-      if (update.selectionSet || update.docChanged) {
-        updateCursor(update.view);
-      }
-      updateVimMode(update.view);
+      const onUpdate = EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          onContentChange?.(update.state.doc.toString());
+        }
+        if (update.selectionSet || update.docChanged) {
+          updateCursor(update.view);
+        }
+        updateVimMode(update.view);
+      });
+
+      const state = EditorState.create({
+        doc: initialContent,
+        extensions: [...createEditorExtensions(), runKeymap, onUpdate],
+      });
+
+      const view = new EditorView({
+        state,
+        parent: container,
+      });
+
+      viewRef.current = view;
+      updateCursor(view);
+      updateVimMode(view);
+      setupVimLeaderMappings(view);
     });
-
-    const state = EditorState.create({
-      doc: initialContent,
-      extensions: [...createEditorExtensions(), runKeymap, onUpdate],
-    });
-
-    const view = new EditorView({
-      state,
-      parent: containerRef.current,
-    });
-
-    viewRef.current = view;
-    updateCursor(view);
-    updateVimMode(view);
-    setupVimLeaderMappings(view);
 
     return () => {
-      view.destroy();
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      viewRef.current?.destroy();
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

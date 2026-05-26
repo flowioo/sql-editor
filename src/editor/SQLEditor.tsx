@@ -128,7 +128,15 @@ export function SQLEditor({
 
       const runKeymap = keymap.of([
         {
-          key: "F5",
+          key: "Mod-Enter",
+          run: (view) => {
+            const sql = getSQLToRun(view);
+            if (sql) onRunRef.current?.(sql);
+            return true;
+          },
+        },
+        {
+          key: "Mod-r",
           run: (view) => {
             const sql = getSQLToRun(view);
             if (sql) onRunRef.current?.(sql);
@@ -179,7 +187,7 @@ export function SQLEditor({
           <span className={`vim-mode ${getVimModeClass(vimMode)}`}>
             {getVimModeLabel(vimMode)}
           </span>
-          <span className="vim-mode-text">— F5 执行选中或当前语句</span>
+          <span className="vim-mode-text">— Ctrl+Enter 或 Ctrl+R 执行</span>
         </div>
         <div className="cursor-info">
           Ln {cursorPos.line}, Col {cursorPos.col}

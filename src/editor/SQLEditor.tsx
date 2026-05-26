@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { createEditorExtensions, setupVimLeaderMappings } from "./extensions";
+import { Vim, getCM } from "@replit/codemirror-vim";
 import type { VimMode } from "../hooks/useVimMode";
 import { useVimMode } from "../hooks/useVimMode";
 import "../styles/editor.css";
@@ -172,15 +173,16 @@ export function SQLEditor({
 
       // Focus editor and enter insert mode for new/empty documents
       view.focus();
-      try {
-        const doc = view.state.doc.toString().trim();
-        if (doc === "" || doc === "-- 新查询") {
-          // Dispatch a keydown for 'i' to trigger vim insert mode
-          const event = new KeyboardEvent("keydown", { key: "i", bubbles: true });
-          view.contentDOM.dispatchEvent(event);
-        }
-      } catch {
-        // vim not available, ignore
+      const doc = view.state.doc.toString().trim();
+      if (doc === "" || doc === "-- 新查询") {
+        setTimeout(() => {
+          try {
+            const cm = getCM(view);
+            if (cm) Vim.handleKey(cm, "i", "user");
+          } catch {
+            // ignore
+          }
+        }, 50);
       }
     });
 

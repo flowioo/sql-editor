@@ -169,6 +169,19 @@ export function SQLEditor({
       updateCursor(view);
       updateVimMode(view);
       setupVimLeaderMappings(view);
+
+      // Focus editor and enter insert mode for new/empty documents
+      view.focus();
+      try {
+        const doc = view.state.doc.toString().trim();
+        if (doc === "" || doc === "-- 新查询") {
+          // Dispatch a keydown for 'i' to trigger vim insert mode
+          const event = new KeyboardEvent("keydown", { key: "i", bubbles: true });
+          view.contentDOM.dispatchEvent(event);
+        }
+      } catch {
+        // vim not available, ignore
+      }
     });
 
     return () => {

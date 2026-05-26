@@ -42,7 +42,7 @@ const THEME = EditorView.theme({
     borderLeftWidth: "2px",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
-    backgroundColor: "rgba(124, 106, 239, 0.3) !important",
+    backgroundColor: "rgba(59, 130, 246, 0.35) !important",
   },
   ".cm-gutters": {
     backgroundColor: "#0f1117",

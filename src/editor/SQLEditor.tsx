@@ -128,7 +128,7 @@ export function SQLEditor({
 
       const runKeymap = keymap.of([
         {
-          key: "Mod-Enter",
+          key: "Ctrl-Enter",
           run: (view) => {
             const sql = getSQLToRun(view);
             if (sql) onRunRef.current?.(sql);
@@ -136,7 +136,7 @@ export function SQLEditor({
           },
         },
         {
-          key: "Mod-r",
+          key: "Ctrl-r",
           run: (view) => {
             const sql = getSQLToRun(view);
             if (sql) onRunRef.current?.(sql);
@@ -187,7 +187,7 @@ export function SQLEditor({
           <span className={`vim-mode ${getVimModeClass(vimMode)}`}>
             {getVimModeLabel(vimMode)}
           </span>
-          <span className="vim-mode-text">— Ctrl+Enter 或 Ctrl+R 执行</span>
+          <span className="vim-mode-text">— Ctrl+Enter / Ctrl+R 执行选中或当前语句</span>
         </div>
         <div className="cursor-info">
           Ln {cursorPos.line}, Col {cursorPos.col}

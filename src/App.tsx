@@ -7,6 +7,7 @@ import { StatusBar } from "./components/StatusBar";
 import { ResultGrid } from "./components/ResultGrid";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { AIPanel } from "./components/AIPanel";
+import { TableStructure } from "./components/TableStructure";
 import { useTabStore } from "./hooks/useTabStore";
 import { useConnection } from "./hooks/useConnection";
 import { useSchema } from "./hooks/useSchema";
@@ -26,6 +27,7 @@ export default function App() {
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const [structureTable, setStructureTable] = useState<string | null>(null);
 
   const {
     status: connStatus,
@@ -183,6 +185,7 @@ export default function App() {
         onFileOpen={handleFileOpen}
         onClearHistory={clearHistory}
         onTableSelect={handleTableSelect}
+        onTableStructure={setStructureTable}
       />
       <div className="editor-area">
         <Toolbar
@@ -226,6 +229,12 @@ export default function App() {
         )}
 
         {result && <ResultGrid result={result} />}
+
+        {structureTable && schema && (() => {
+          const table = schema.tables.find((t) => t.name === structureTable);
+          if (!table) return null;
+          return <TableStructure table={table} onClose={() => setStructureTable(null)} />;
+        })()}
 
         <StatusBar
           vimMode={vimMode}

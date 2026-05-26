@@ -6,9 +6,10 @@ interface SchemaTreeProps {
   readonly schema: DatabaseSchema | null;
   readonly descriptions: ReadonlyMap<string, string>;
   readonly onTableSelect?: (tableName: string) => void;
+  readonly onTableStructure?: (tableName: string) => void;
 }
 
-export function SchemaTree({ schema, descriptions, onTableSelect }: SchemaTreeProps) {
+export function SchemaTree({ schema, descriptions, onTableSelect, onTableStructure }: SchemaTreeProps) {
   const [filter, setFilter] = useState("");
 
   if (!schema) {
@@ -54,6 +55,7 @@ export function SchemaTree({ schema, descriptions, onTableSelect }: SchemaTreePr
           table={table}
           descriptions={descriptions}
           onTableSelect={onTableSelect}
+          onTableStructure={onTableStructure}
         />
       ))}
     </div>
@@ -72,21 +74,18 @@ interface TableNodeProps {
   };
   readonly descriptions: ReadonlyMap<string, string>;
   readonly onTableSelect?: (tableName: string) => void;
+  readonly onTableStructure?: (tableName: string) => void;
 }
 
-function TableNode({ table, descriptions, onTableSelect }: TableNodeProps) {
+function TableNode({ table, descriptions, onTableSelect, onTableStructure }: TableNodeProps) {
   const [expanded, setExpanded] = useState(false);
-
-  const handleDoubleClick = () => {
-    onTableSelect?.(table.name);
-  };
 
   return (
     <div className="schema-table">
       <button
         className="schema-table-header"
         onClick={() => setExpanded((prev) => !prev)}
-        onDoubleClick={handleDoubleClick}
+        onDoubleClick={() => onTableSelect?.(table.name)}
         title="单击展开/收起，双击查询 SELECT * FROM"
       >
         <span className={`schema-arrow ${expanded ? "expanded" : ""}`}>
@@ -97,6 +96,18 @@ function TableNode({ table, descriptions, onTableSelect }: TableNodeProps) {
         <span className="schema-column-count">
           {table.columns.length}
         </span>
+        {onTableStructure && (
+          <span
+            className="schema-table-structure-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTableStructure(table.name);
+            }}
+            title="查看表结构"
+          >
+            ℹ
+          </span>
+        )}
       </button>
       {expanded && (
         <div className="schema-columns">

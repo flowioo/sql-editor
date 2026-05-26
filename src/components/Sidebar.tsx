@@ -17,6 +17,7 @@ interface SidebarProps {
   readonly onFileOpen: (filename: string) => void;
   readonly onClearHistory: () => void;
   readonly onTableSelect?: (tableName: string) => void;
+  readonly onTableStructure?: (tableName: string) => void;
 }
 
 const TAB_LABELS: Record<SidebarTabKey, string> = {
@@ -37,6 +38,7 @@ export function Sidebar({
   onFileOpen,
   onClearHistory,
   onTableSelect,
+  onTableStructure,
 }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTabKey>("schema");
 
@@ -71,7 +73,7 @@ export function Sidebar({
                 {offline && <span className="offline-badge">离线</span>}
               </div>
             )}
-            <SchemaTree schema={schema} descriptions={descriptions} onTableSelect={onTableSelect} />
+            <SchemaTree schema={schema} descriptions={descriptions} onTableSelect={onTableSelect} onTableStructure={onTableStructure} />
           </>
         )}
 

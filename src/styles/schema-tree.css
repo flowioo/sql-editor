@@ -133,3 +133,148 @@
   color: var(--text3);
   opacity: 0.6;
 }
+
+/* Table structure info button */
+.schema-table-structure-btn {
+  font-size: 0.8em;
+  color: var(--text3);
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.schema-table-structure-btn:hover {
+  color: var(--accent);
+  background: rgba(124, 106, 239, 0.15);
+}
+
+/* Table structure panel (shown in result area) */
+.table-structure-panel {
+  border-top: 1px solid var(--border);
+  overflow: auto;
+}
+
+.table-structure-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.table-structure-title {
+  font-weight: 600;
+  font-size: 0.85em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-structure-meta {
+  font-size: 0.72em;
+  color: var(--text3);
+}
+
+.table-structure-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.table-structure-close:hover {
+  color: var(--text);
+}
+
+.table-structure-grid {
+  font-size: 0.8em;
+  font-family: var(--mono);
+}
+
+.table-structure-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-structure-row.header {
+  font-weight: 600;
+  color: var(--text3);
+  font-size: 0.85em;
+  font-family: var(--sans);
+  position: sticky;
+  top: 0;
+  background: var(--surface2);
+  z-index: 1;
+}
+
+.table-structure-row.pk-row {
+  background: rgba(124, 106, 239, 0.04);
+}
+
+.col-flag {
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.col-name {
+  flex: 2;
+  min-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-type {
+  flex: 2;
+  min-width: 100px;
+}
+
+.col-null {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.col-default {
+  flex: 3;
+  min-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flag-pk {
+  background: rgba(124, 106, 239, 0.15);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 0.8em;
+}
+
+.nullable-yes {
+  color: var(--text3);
+}
+
+.nullable-no {
+  color: var(--yellow);
+  font-weight: 600;
+}
+
+.default-value {
+  color: var(--green);
+}
+
+.no-default {
+  color: var(--text3);
+  opacity: 0.5;
+}

@@ -32,7 +32,7 @@ export function TabBar({ tabs, activeTabId, onAddTab, onRemoveTab, onSelectTab }
           )}
         </button>
       ))}
-      <button className="tab-add" onClick={onAddTab}>+</button>
+      <button className="tab-add" onClick={() => onAddTab()}>+</button>
     </div>
   );
 }

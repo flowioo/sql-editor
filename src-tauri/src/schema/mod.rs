@@ -15,9 +15,19 @@ pub struct Column {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Index {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub is_unique: bool,
+    pub is_primary: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Table {
     pub name: String,
     pub columns: Vec<Column>,
+    #[serde(default)]
+    pub indexes: Vec<Index>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

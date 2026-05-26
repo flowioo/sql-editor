@@ -3,7 +3,7 @@ use sqlx::MySqlPool;
 use sqlx::mysql::MySqlRow;
 use sqlx::{Row as SqlxRow, Column as SqlxColumn};
 use crate::db::QueryResult;
-use crate::schema::{DatabaseSchema, Table, Column};
+use crate::schema::{DatabaseSchema, Index, Table, Column};
 
 const MAX_ROWS: usize = 10_000;
 
@@ -133,6 +133,33 @@ async fn get_mysql_columns(pool: &MySqlPool, table_name: &str) -> Result<Vec<Col
     Ok(columns)
 }
 
+async fn get_mysql_indexes(pool: &MySqlPool, table_name: &str) -> Result<Vec<Index>, String> {
+    let rows = sqlx::query(
+        "SELECT s.index_name, s.column_name, s.non_unique, s.seq_in_index
+         FROM information_schema.statistics s
+         WHERE s.table_schema = DATABASE() AND s.table_name = ?
+         ORDER BY s.index_name, s.seq_in_index"
+    )
+    .bind(table_name)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("查询索引失败 ({}): {}", table_name, e))?;
+
+    let mut map: std::collections::BTreeMap<String, (bool, Vec<String>)> = std::collections::BTreeMap::new();
+    for row in &rows {
+        let idx_name: String = row.get(0);
+        let col_name: String = row.get(1);
+        let non_unique: i32 = row.get(2);
+        let entry = map.entry(idx_name).or_insert((non_unique == 0, vec![]));
+        entry.1.push(col_name);
+    }
+
+    Ok(map.into_iter().map(|(name, (is_unique, columns))| {
+        let is_primary = name == "PRIMARY";
+        Index { name, columns, is_unique, is_primary }
+    }).collect())
+}
+
 async fn get_schema_async(pool: &MySqlPool, conn_key: &str) -> Result<DatabaseSchema, String> {
     let db_name = conn_key.rsplit('/').next().unwrap_or("unknown").to_string();
 
@@ -149,7 +176,8 @@ async fn get_schema_async(pool: &MySqlPool, conn_key: &str) -> Result<DatabaseSc
     for table_row in &table_rows {
         let table_name: String = table_row.get(0);
         let columns = get_mysql_columns(pool, &table_name).await?;
-        tables.push(Table { name: table_name, columns });
+        let indexes = get_mysql_indexes(pool, &table_name).await?;
+        tables.push(Table { name: table_name, columns, indexes });
     }
 
     Ok(DatabaseSchema {

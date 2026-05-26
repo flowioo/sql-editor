@@ -1,5 +1,5 @@
 use rusqlite::Connection;
-use crate::schema::{DatabaseSchema, Table, Column};
+use crate::schema::{DatabaseSchema, Index, Table, Column};
 
 pub fn introspect_sqlite(conn: &Connection, path: &str) -> Result<DatabaseSchema, String> {
     let db_name = std::path::Path::new(path)
@@ -23,9 +23,11 @@ pub fn introspect_sqlite(conn: &Connection, path: &str) -> Result<DatabaseSchema
 
     for table_name in table_names {
         let columns = get_table_columns(conn, &table_name)?;
+        let indexes = get_table_indexes(conn, &table_name)?;
         tables.push(Table {
             name: table_name,
             columns,
+            indexes,
         });
     }
 
@@ -62,4 +64,46 @@ fn get_table_columns(conn: &Connection, table_name: &str) -> Result<Vec<Column>,
     .collect();
 
     Ok(columns)
+}
+
+fn get_table_indexes(conn: &Connection, table_name: &str) -> Result<Vec<Index>, String> {
+    let escaped = table_name.replace('"', "\"\"");
+    let pragma = format!("PRAGMA index_list(\"{}\")", escaped);
+    let mut stmt = conn.prepare(&pragma)
+        .map_err(|e| format!("查询索引列表失败 ({})：{}", table_name, e))?;
+
+    let index_infos: Vec<(String, bool, bool)> = stmt.query_map([], |row| {
+        let name: String = row.get(1)?;
+        let unique: bool = row.get(2).unwrap_or(false);
+        let origin: String = row.get(3).unwrap_or_default();
+        let is_primary = origin == "pk";
+        Ok((name, unique, is_primary))
+    })
+    .map_err(|e| format!("读取索引列表失败 ({})：{}", table_name, e))?
+    .filter_map(|r: Result<(String, bool, bool), _>| r.ok())
+    .collect();
+
+    let mut indexes = Vec::new();
+    for (idx_name, is_unique, is_primary) in index_infos {
+        let idx_escaped = idx_name.replace('"', "\"\"");
+        let col_pragma = format!("PRAGMA index_info(\"{}\")", idx_escaped);
+        let mut col_stmt = conn.prepare(&col_pragma)
+            .map_err(|e| format!("查询索引列失败 ({})：{}", idx_name, e))?;
+
+        let columns: Vec<String> = col_stmt.query_map([], |row| {
+            row.get::<_, String>(2)
+        })
+        .map_err(|e| format!("读取索引列失败 ({})：{}", idx_name, e))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+        indexes.push(Index {
+            name: idx_name,
+            columns,
+            is_unique,
+            is_primary,
+        });
+    }
+
+    Ok(indexes)
 }

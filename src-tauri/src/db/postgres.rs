@@ -147,6 +147,46 @@ async fn get_pg_columns(pool: &PgPool, table_name: &str) -> Result<Vec<Column>, 
     Ok(columns)
 }
 
+async fn get_pg_indexes(pool: &PgPool, table_name: &str) -> Result<Vec<crate::schema::Index>, String> {
+    use crate::schema::Index;
+
+    let rows = sqlx::query(
+        "SELECT i.relname AS index_name,
+                a.attname AS column_name,
+                ix.indisunique AS is_unique,
+                ix.indisprimary AS is_primary
+         FROM pg_index ix
+         JOIN pg_class t ON t.oid = ix.indrelid
+         JOIN pg_class i ON i.oid = ix.indexrelid
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+         WHERE n.nspname = 'public' AND t.relname = $1
+         ORDER BY i.relname, a.attnum"
+    )
+    .bind(table_name)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("查询索引失败 ({}): {}", table_name, e))?;
+
+    // Group by index name
+    let mut map: std::collections::BTreeMap<String, (bool, bool, Vec<String>)> = std::collections::BTreeMap::new();
+    for row in &rows {
+        let idx_name: String = row.get(0);
+        let col_name: String = row.get(1);
+        let is_unique: bool = row.get(2);
+        let is_primary: bool = row.get(3);
+        let entry = map.entry(idx_name).or_insert((is_unique, is_primary, vec![]));
+        entry.2.push(col_name);
+    }
+
+    Ok(map.into_iter().map(|(name, (is_unique, is_primary, columns))| Index {
+        name,
+        columns,
+        is_unique,
+        is_primary,
+    }).collect())
+}
+
 async fn get_schema_async(pool: &PgPool, conn_key: &str) -> Result<DatabaseSchema, String> {
     let db_name = conn_key.rsplit('/').next().unwrap_or("unknown").to_string();
 
@@ -163,7 +203,8 @@ async fn get_schema_async(pool: &PgPool, conn_key: &str) -> Result<DatabaseSchem
     for table_row in &table_rows {
         let table_name: String = table_row.get(0);
         let columns = get_pg_columns(pool, &table_name).await?;
-        tables.push(Table { name: table_name, columns });
+        let indexes = get_pg_indexes(pool, &table_name).await?;
+        tables.push(Table { name: table_name, columns, indexes });
     }
 
     Ok(DatabaseSchema {

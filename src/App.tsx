@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { TabBar } from "./components/TabBar";
@@ -16,20 +16,20 @@ import { useQuery } from "./hooks/useQuery";
 import { useQueryHistory } from "./hooks/useQueryHistory";
 import { useCodebaseScan } from "./hooks/useCodebaseScan";
 import { useColumnDescriptions } from "./hooks/useColumnDescriptions";
-import { setSchemaRefreshCallback, updateSchemaForAutocomplete } from "./editor/extensions";
-import type { VimMode } from "./hooks/useVimMode";
-import type { ConnectionConfig } from "./types/connection";
+import { updateSchemaForAutocomplete } from "./editor/extensions";
 import "./styles/layout.css";
 import "./styles/result-tabs.css";
 
 export default function App() {
-  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent } =
-    useTabStore();
-  const [vimMode, setVimMode] = useState<VimMode>("normal");
-  const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent } = useTabStore();
+  const [vimEnabled, setVimEnabled] = useState(true);
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [structureTable, setStructureTable] = useState<string | null>(null);
+  const [vimMode, setVimMode] = useState<string>("NORMAL");
+
+  // Ref to get current content from editor
+  const getContentRef = useRef<(() => string) | null>(null);
 
   const {
     status: connStatus,
@@ -53,11 +53,7 @@ export default function App() {
     execute: executeQuery,
   } = useQuery();
   const { history, savedFiles, addEntry, clearHistory, loadFileContent } = useQueryHistory();
-  const {
-    scanning,
-    scanResult,
-    scanCodebase,
-  } = useCodebaseScan();
+  const { scanning, scanResult, scanCodebase } = useCodebaseScan();
   const { descriptions, loadDescriptions } = useColumnDescriptions();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -70,19 +66,14 @@ export default function App() {
     }
   }, [connStatus, loadFromCache, diffOnConnect]);
 
-  // Wire up leader+rs vim keybinding
-  useEffect(() => {
-    setSchemaRefreshCallback(() => refreshSchema);
-  }, [refreshSchema]);
-
-  // Push schema to autocomplete when it changes
+  // Push schema to autocomplete
   useEffect(() => {
     if (schema) {
       updateSchemaForAutocomplete(schema);
     }
   }, [schema]);
 
-  // Load column descriptions when schema changes
+  // Load column descriptions
   useEffect(() => {
     if (schema) {
       for (const table of schema.tables) {
@@ -91,34 +82,28 @@ export default function App() {
     }
   }, [schema, loadDescriptions]);
 
-  const handleContentChange = useCallback(
-    (content: string) => {
-      if (activeTabId) {
-        updateTabContent(activeTabId, content);
-      }
+  const handleRun = useCallback(() => {
+      const sql = getContentRef.current?.() ?? "";
+      if (connStatus !== "connected") return;
+      if (!sql.trim()) return;
+      executeQuery(sql).then((queryResult) => {
+        const rowCount = queryResult
+          ? queryResult.results.reduce((sum, r) => sum + (r.is_query ? r.rows.length : 0), 0)
+          : null;
+        addEntry({
+          sql,
+          executedAt: new Date().toISOString(),
+          databaseName: displayName,
+          rowCount,
+          error: queryError,
+        });
+      });
     },
-    [activeTabId, updateTabContent],
+    [connStatus, executeQuery, addEntry, displayName, queryError],
   );
 
-  const handleRun = useCallback((sql: string) => {
-    if (connStatus !== "connected") return;
-    if (!sql.trim()) return;
-    executeQuery(sql).then((queryResult) => {
-      const rowCount = queryResult
-        ? queryResult.results.reduce((sum, r) => sum + (r.is_query ? r.rows.length : 0), 0)
-        : null;
-      addEntry({
-        sql,
-        executedAt: new Date().toISOString(),
-        databaseName: displayName,
-        rowCount,
-        error: queryError,
-      });
-    });
-  }, [connStatus, executeQuery, addEntry, displayName, queryError]);
-
   const handleConnectionDialogConnect = useCallback(
-    async (config: ConnectionConfig) => {
+    async (config: any) => {
       await doConnect(config);
       setShowConnectionDialog(false);
     },
@@ -171,7 +156,9 @@ export default function App() {
     if (!schema) return "";
     return schema.tables
       .map((t) => {
-        const cols = t.columns.map((c) => `  ${c.name} ${c.data_type}${c.is_primary_key ? " PK" : ""}`).join("\n");
+        const cols = t.columns
+          .map((c) => `  ${c.name} ${c.data_type}${c.is_primary_key ? " PK" : ""}`)
+          .join("\n");
         return `TABLE ${t.name} (\n${cols}\n)`;
       })
       .join("\n\n");
@@ -202,11 +189,14 @@ export default function App() {
           scanResult={scanResult}
           onConnect={() => setShowConnectionDialog(true)}
           onDisconnect={doDisconnect}
-          onRun={() => handleRun(activeTab?.content ?? "")}
+          onRun={handleRun}
           onRefreshSchema={refreshSchema}
           onScanCodebase={scanCodebase}
           onToggleAI={() => setShowAI(!showAI)}
+          onToggleVim={() => setVimEnabled(!vimEnabled)}
           showAI={showAI}
+          vimEnabled={vimEnabled}
+          vimMode={vimEnabled ? vimMode : undefined}
         />
         <TabBar
           tabs={tabs}
@@ -218,11 +208,11 @@ export default function App() {
         {activeTab && (
           <SQLEditor
             key={activeTab.id}
-            initialContent={activeTab.content}
-            onContentChange={handleContentChange}
-            onVimModeChange={setVimMode}
-            onCursorChange={(line, col) => setCursorPos({ line, col })}
+            content={activeTab.content}
+            enableVim={vimEnabled}
+            getContentRef={getContentRef}
             onRun={handleRun}
+            onModeChange={setVimMode}
           />
         )}
 
@@ -235,10 +225,7 @@ export default function App() {
 
         {result && (
           <>
-            <ResultTabs
-              results={result.results}
-              totalDurationMs={result.total_duration_ms}
-            />
+            <ResultTabs results={result.results} totalDurationMs={result.total_duration_ms} />
             <ConsoleMessages results={result.results} />
           </>
         )}
@@ -249,26 +236,15 @@ export default function App() {
           return <TableStructure table={table} onClose={() => setStructureTable(null)} />;
         })()}
 
-        <StatusBar
-          vimMode={vimMode}
-          cursorLine={cursorPos.line}
-          cursorCol={cursorPos.col}
-        />
+        <StatusBar vimMode={vimMode} cursorLine={1} cursorCol={1} />
       </div>
 
       {showAI && (
-        <AIPanel
-          schemaContext={schemaContext}
-          connectionName={displayName}
-          onInsertSQL={handleInsertSQL}
-        />
+        <AIPanel schemaContext={schemaContext} connectionName={displayName} onInsertSQL={handleInsertSQL} />
       )}
 
       {showConnectionDialog && (
-        <ConnectionDialog
-          onClose={() => setShowConnectionDialog(false)}
-          onConnect={handleConnectionDialogConnect}
-        />
+        <ConnectionDialog onClose={() => setShowConnectionDialog(false)} onConnect={handleConnectionDialogConnect} />
       )}
     </div>
   );

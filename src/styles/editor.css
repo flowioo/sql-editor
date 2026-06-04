@@ -69,6 +69,128 @@
   font-size: 0.95em;
 }
 
+.sql-textarea {
+  width: 100%;
+  height: 100%;
+  background: #0f1117;
+  color: transparent;
+  border: none;
+  outline: none;
+  padding: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  resize: none;
+  caret-color: #7c6aef;
+  line-height: 1.7;
+  position: relative;
+  z-index: 2;
+}
+
+.sql-textarea::selection {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+.sql-textarea:focus {
+  outline: none;
+}
+
+.sql-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #cdd1de;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sql-editor-body {
+  position: relative;
+  overflow: hidden;
+}
+
+.sql-keyword {
+  color: #7c6aef;
+  font-weight: 600;
+}
+
+.sql-string {
+  color: #98c379;
+}
+
+.sql-number {
+  color: #e5c07b;
+}
+
+.sql-comment {
+  color: #5c6370;
+  font-style: italic;
+}
+
+.sql-autocomplete {
+  position: absolute;
+  top: 40px;
+  left: 12px;
+  background: #282c34;
+  border: 1px solid #3d4148;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  min-width: 200px;
+}
+
+.sql-autocomplete-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  cursor: pointer;
+  gap: 8px;
+}
+
+.sql-autocomplete-item:hover,
+.sql-autocomplete-item.selected {
+  background: rgba(124, 106, 239, 0.2);
+}
+
+.sql-autocomplete-type {
+  font-size: 0.7em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.sql-autocomplete-type.table {
+  background: rgba(106, 141, 189, 0.3);
+  color: #6f9;
+}
+
+.sql-autocomplete-type.column {
+  background: rgba(200, 180, 100, 0.3);
+  color: #e5c07b;
+}
+
+.sql-autocomplete-label {
+  color: #e1e4ed;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.sql-autocomplete-detail {
+  color: #5c6370;
+  font-size: 0.85em;
+  margin-left: auto;
+}
+
 .cm-editor {
   height: 100%;
   font-size: 0.85em;

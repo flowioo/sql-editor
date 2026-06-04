@@ -15,7 +15,10 @@ interface ToolbarProps {
   readonly onRefreshSchema: () => void;
   readonly onScanCodebase: () => void;
   readonly onToggleAI: () => void;
+  readonly onToggleVim: () => void;
   readonly showAI: boolean;
+  readonly vimEnabled: boolean;
+  readonly vimMode?: string;
 }
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
@@ -37,7 +40,10 @@ export function Toolbar({
   onRefreshSchema,
   onScanCodebase,
   onToggleAI,
+  onToggleVim,
   showAI,
+  vimEnabled,
+  vimMode,
 }: ToolbarProps) {
   return (
     <div className="toolbar">
@@ -92,6 +98,14 @@ export function Toolbar({
       )}
 
       <div className="spacer" />
+
+      <button
+        className={`btn btn-secondary ${vimEnabled ? "active" : ""}`}
+        onClick={onToggleVim}
+        title={vimEnabled ? "关闭 Vim 模式" : "开启 Vim 模式"}
+      >
+        <span>{vimEnabled ? (vimMode || "VIM") : "vim"}</span>
+      </button>
 
       <button
         className={`btn btn-secondary ${showAI ? "active" : ""}`}

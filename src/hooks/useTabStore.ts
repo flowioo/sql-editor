@@ -45,7 +45,7 @@ export function useTabStore(): UseTabStoreReturn {
     const newTab: QueryTab = {
       id,
       title: `查询 ${id}`,
-      content: initialContent ?? "-- 新查询\n\n",
+      content: initialContent ?? "",
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(id);

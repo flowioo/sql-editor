@@ -52,6 +52,66 @@ export function getCachedSchema(): DatabaseSchema | null {
 }
 
 /**
+ * Extract the referenced table name from a SQL statement. Handles the
+ * common SELECT shapes including `FROM <table>`, `JOIN <table>`, and
+ * `UPDATE/INSERT INTO <table>`. Returns null for queries that touch
+ * no single table (CTEs, UNION, derived tables) or for non-DML.
+ *
+ * Heuristic: strips comments and string literals first so a table
+ * name inside `'…'` won't be matched.
+ */
+export function extractTableFromSql(sql: string): string | null {
+  // Strip line comments and string literals so we don't match inside them.
+  // Important: keep double-quoted identifiers ("users") — they are NOT
+  // string literals in Postgres/standard SQL.
+  const cleaned = sql
+    .replace(/--[^\n]*/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/'(?:''|[^'])*'/g, " ");
+
+  // Detect CTEs — if the statement starts with WITH, the real table is
+  // not the CTE name. Reject these so the caller falls back to copy mode.
+  if (/^\s*WITH\b/i.test(cleaned)) return null;
+
+  // FROM <table> | UPDATE <table> | INSERT INTO <table>
+  // Allow optional schema qualifier (schema.table) and optional double
+  // quotes around the table name.
+  const re = /\b(?:FROM|UPDATE|INSERT\s+INTO)\s+(?:\w+\s*\.\s*)?"?([A-Za-z_]\w*)"?/i;
+  const m = cleaned.match(re);
+  if (!m) return null;
+  const word = m[1].toLowerCase();
+  if (["set", "values", "select", "where", "from", "into", "update"].includes(word)) {
+    return null;
+  }
+  return m[1];
+}
+
+/**
+ * Return the primary-key column names for a given table from the
+ * cached schema. Returns [] if the schema isn't loaded or the table
+ * has no primary key (we then fall back to all columns).
+ */
+export function getPrimaryKeyColumns(tableName: string): string[] {
+  if (!cachedSchema) return [];
+  const table = cachedSchema.tables.find(
+    (t) => t.name.toLowerCase() === tableName.toLowerCase(),
+  );
+  if (!table) return [];
+  return table.columns.filter((c) => c.is_primary_key).map((c) => c.name);
+}
+
+/**
+ * Return all column names for a given table.
+ */
+export function getColumnsForTable(tableName: string): string[] {
+  if (!cachedSchema) return [];
+  const table = cachedSchema.tables.find(
+    (t) => t.name.toLowerCase() === tableName.toLowerCase(),
+  );
+  return table ? table.columns.map((c) => c.name) : [];
+}
+
+/**
  * Extract the current word being typed at position.
  * "Current" = the contiguous [\w.] run immediately preceding pos.
  * Returns { word, start } where start is the byte offset of word[0].

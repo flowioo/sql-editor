@@ -30,6 +30,8 @@ export default function App() {
 
   // Ref to get current content from editor
   const getContentRef = useRef<(() => string) | null>(null);
+  // Ref to get the SQL that should be executed (selection → current stmt → full)
+  const getSqlToExecuteRef = useRef<(() => string) | null>(null);
 
   const {
     status: connStatus,
@@ -83,7 +85,8 @@ export default function App() {
   }, [schema, loadDescriptions]);
 
   const handleRun = useCallback(() => {
-      const sql = getContentRef.current?.() ?? "";
+      // Smart execution: prefer selection → current statement → full text
+      const sql = getSqlToExecuteRef.current?.() ?? getContentRef.current?.() ?? "";
       if (connStatus !== "connected") return;
       if (!sql.trim()) return;
       executeQuery(sql).then((queryResult) => {
@@ -211,8 +214,10 @@ export default function App() {
             content={activeTab.content}
             enableVim={vimEnabled}
             getContentRef={getContentRef}
+            getSqlToExecuteRef={getSqlToExecuteRef}
             onRun={handleRun}
             onModeChange={setVimMode}
+            onContentChange={(content) => updateTabContent(activeTab.id, content)}
           />
         )}
 
@@ -225,7 +230,13 @@ export default function App() {
 
         {result && (
           <>
-            <ResultTabs results={result.results} totalDurationMs={result.total_duration_ms} />
+            <ResultTabs
+              results={result.results}
+              totalDurationMs={result.total_duration_ms}
+              onSubmitUpdate={(sql) => {
+                if (activeTabId) updateTabContent(activeTabId, sql);
+              }}
+            />
             <ConsoleMessages results={result.results} />
           </>
         )}

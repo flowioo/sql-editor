@@ -5,6 +5,8 @@ import { ResultGrid } from "./ResultGrid";
 interface ResultTabsProps {
   readonly results: readonly StatementResult[];
   readonly totalDurationMs: number;
+  /** Forwarded to the active ResultGrid so inline edits can submit UPDATE. */
+  readonly onSubmitUpdate?: (sql: string) => void;
 }
 
 const MAX_TAB_LABEL_LENGTH = 25;
@@ -18,7 +20,11 @@ function tabLabel(result: StatementResult, index: number): string {
   return `结果 ${index + 1}: ${sqlPreview}${result.sql.trim().length > MAX_TAB_LABEL_LENGTH ? "…" : ""}`;
 }
 
-export function ResultTabs({ results, totalDurationMs }: ResultTabsProps) {
+export function ResultTabs({
+  results,
+  totalDurationMs,
+  onSubmitUpdate,
+}: ResultTabsProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   // Only show SELECT (is_query=true) results
@@ -52,7 +58,9 @@ export function ResultTabs({ results, totalDurationMs }: ResultTabsProps) {
           {totalDurationMs}ms
         </span>
       </div>
-      {activeResult && <ResultGrid result={activeResult} />}
+      {activeResult && (
+        <ResultGrid result={activeResult} onSubmitUpdate={onSubmitUpdate} />
+      )}
     </div>
   );
 }

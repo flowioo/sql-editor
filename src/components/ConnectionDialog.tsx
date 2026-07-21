@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ConnectionConfig } from "../types/connection";
@@ -34,6 +34,30 @@ export function saveConnection(conn: SavedConnection): void {
     list.push(conn);
   }
   writeSavedConnections(list);
+}
+
+/** Update the displayed name of an existing saved connection by id. */
+export function renameSavedConnection(id: string, name: string): void {
+  const list = loadSavedConnections();
+  const idx = list.findIndex((c) => c.id === id);
+  if (idx < 0) return;
+  list[idx] = { ...list[idx], name: name.trim() || list[idx].name };
+  writeSavedConnections(list);
+}
+
+/** Duplicate a saved connection under a new id and append it. Returns the new entry. */
+export function duplicateSavedConnection(id: string): SavedConnection | null {
+  const list = loadSavedConnections();
+  const src = list.find((c) => c.id === id);
+  if (!src) return null;
+  const newConn: SavedConnection = {
+    id: `${src.id}__copy_${Date.now()}`,
+    name: `${src.name} (副本)`,
+    config: src.config,
+  };
+  list.push(newConn);
+  writeSavedConnections(list);
+  return newConn;
 }
 
 export function removeSavedConnection(id: string): void {
@@ -164,9 +188,18 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
     onConnect(conn.config);
   }, [onConnect]);
 
-  const handleDeleteSaved = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteSaved = useCallback((id: string) => {
     removeSavedConnection(id);
+    setSavedList(loadSavedConnections());
+  }, []);
+
+  const handleRenameSaved = useCallback((id: string, name: string) => {
+    renameSavedConnection(id, name);
+    setSavedList(loadSavedConnections());
+  }, []);
+
+  const handleDuplicateSaved = useCallback((id: string) => {
+    duplicateSavedConnection(id);
     setSavedList(loadSavedConnections());
   }, []);
 
@@ -209,22 +242,14 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
             ) : (
               <div className="saved-list">
                 {savedList.map((conn) => (
-                  <div key={conn.id} className="saved-item" onClick={() => handleSavedConnect(conn)}>
-                    <span className={`saved-type type-${conn.config.type}`}>
-                      {conn.config.type === "sqlite" ? "SQLite" : conn.config.type === "postgresql" ? "PG" : "MY"}
-                    </span>
-                    <div className="saved-info">
-                      <span className="saved-name">{conn.name}</span>
-                      <span className="saved-detail">
-                        {conn.config.type === "sqlite"
-                          ? conn.config.path
-                          : conn.config.type === "postgresql"
-                            ? `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`
-                            : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`}
-                      </span>
-                    </div>
-                    <button className="saved-delete" onClick={(e) => handleDeleteSaved(conn.id, e)}>删除</button>
-                  </div>
+                  <SavedItem
+                    key={conn.id}
+                    conn={conn}
+                    onConnect={() => handleSavedConnect(conn)}
+                    onDelete={() => handleDeleteSaved(conn.id)}
+                    onRename={(name) => handleRenameSaved(conn.id, name)}
+                    onDuplicate={() => handleDuplicateSaved(conn.id)}
+                  />
                 ))}
               </div>
             )}
@@ -344,6 +369,87 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface SavedItemProps {
+  readonly conn: SavedConnection;
+  readonly onConnect: () => void;
+  readonly onDelete: () => void;
+  readonly onRename: (name: string) => void;
+  readonly onDuplicate: () => void;
+}
+
+function SavedItem({ conn, onConnect, onDelete, onRename, onDuplicate }: SavedItemProps) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(conn.name);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    if (editValue.trim() && editValue.trim() !== conn.name) {
+      onRename(editValue);
+    }
+  };
+
+  const detail =
+    conn.config.type === "sqlite"
+      ? conn.config.path
+      : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`;
+
+  return (
+    <div
+      className="saved-item"
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest(".saved-actions")) return;
+        onConnect();
+      }}
+    >
+      <span className={`saved-type type-${conn.config.type}`}>
+        {conn.config.type === "sqlite"
+          ? "SQLite"
+          : conn.config.type === "postgresql"
+            ? "PG"
+            : conn.config.type === "mysql"
+              ? "MY"
+              : "RD"}
+      </span>
+      <div className="saved-info">
+        {editing ? (
+          <input
+            ref={inputRef}
+            className="saved-rename-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); commit(); }
+              else if (e.key === "Escape") { e.preventDefault(); setEditing(false); setEditValue(conn.name); }
+            }}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            spellCheck={false}
+          />
+        ) : (
+          <span className="saved-name" onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setEditValue(conn.name); }}>
+            {conn.name}
+          </span>
+        )}
+        <span className="saved-detail">{detail}</span>
+      </div>
+      <div className="saved-actions" onClick={(e) => e.stopPropagation()}>
+        <button className="saved-action" onClick={onConnect} title="连接">连接</button>
+        <button className="saved-action" onClick={() => setEditing(true)} title="重命名">重命名</button>
+        <button className="saved-action" onClick={onDuplicate} title="复制">复制</button>
+        <button className="saved-action danger" onClick={onDelete} title="删除">删除</button>
       </div>
     </div>
   );

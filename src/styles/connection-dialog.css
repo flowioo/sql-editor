@@ -306,6 +306,45 @@
   background: rgba(239, 108, 108, 0.1);
 }
 
+.saved-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.saved-action {
+  padding: 2px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid #3d4148;
+  color: #cdd1de;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.saved-action:hover {
+  background: rgba(124, 106, 239, 0.18);
+  color: #fff;
+}
+
+.saved-action.danger:hover {
+  color: #ef6c6c;
+  border-color: #ef6c6c;
+  background: rgba(239, 108, 108, 0.1);
+}
+
+.saved-rename-input {
+  width: 100%;
+  font-size: 0.95em;
+  padding: 1px 4px;
+  background: #0f1117;
+  border: 1px solid #7c6aef;
+  border-radius: 3px;
+  color: #cdd1de;
+  outline: none;
+  font-family: inherit;
+}
+
 /* Mode tabs */
 .connection-mode-tabs {
   display: flex;

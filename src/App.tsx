@@ -21,7 +21,7 @@ import "./styles/layout.css";
 import "./styles/result-tabs.css";
 
 export default function App() {
-  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent } = useTabStore();
+  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent, renameTab } = useTabStore();
   const [vimEnabled, setVimEnabled] = useState(true);
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [showAI, setShowAI] = useState(false);
@@ -176,9 +176,12 @@ export default function App() {
         descriptions={descriptions}
         history={history}
         savedFiles={savedFiles}
+        currentConnectionId={displayName}
         onHistorySelect={handleHistorySelect}
         onFileOpen={handleFileOpen}
         onClearHistory={clearHistory}
+        onConnect={handleConnectionDialogConnect}
+        onNewConnection={() => setShowConnectionDialog(true)}
         onTableSelect={handleTableSelect}
         onTableStructure={setStructureTable}
       />
@@ -205,8 +208,9 @@ export default function App() {
           tabs={tabs}
           activeTabId={activeTabId}
           onAddTab={addTab}
-          onRemoveTab={removeTab}
+          removeTab={removeTab}
           onSelectTab={setActiveTab}
+          onRenameTab={renameTab}
         />
         {activeTab && (
           <SQLEditor

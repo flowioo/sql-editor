@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { DatabaseSchema } from "../hooks/useSchema";
 import type { QueryHistoryEntry, QueryFileInfo } from "../hooks/useQueryHistory";
+import {
+  loadSavedConnections,
+  removeSavedConnection,
+  type SavedConnection,
+} from "./ConnectionDialog";
 import { SchemaTree } from "./SchemaTree";
 import "../styles/sidebar.css";
 
@@ -13,9 +18,12 @@ interface SidebarProps {
   readonly descriptions: ReadonlyMap<string, string>;
   readonly history: readonly QueryHistoryEntry[];
   readonly savedFiles: readonly QueryFileInfo[];
+  readonly currentConnectionId: string | null;
   readonly onHistorySelect: (sql: string) => void;
   readonly onFileOpen: (filename: string) => void;
   readonly onClearHistory: () => void;
+  readonly onConnect: (config: import("../types/connection").ConnectionConfig) => void;
+  readonly onNewConnection: () => void;
   readonly onTableSelect?: (tableName: string) => void;
   readonly onTableStructure?: (tableName: string) => void;
 }
@@ -34,13 +42,19 @@ export function Sidebar({
   descriptions,
   history,
   savedFiles,
+  currentConnectionId,
   onHistorySelect,
   onFileOpen,
   onClearHistory,
+  onConnect,
+  onNewConnection,
   onTableSelect,
   onTableStructure,
 }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTabKey>("schema");
+  const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections);
+
+  const refreshSaved = () => setSavedList(loadSavedConnections());
 
   return (
     <aside className="sidebar">
@@ -58,8 +72,67 @@ export function Sidebar({
 
       <div className="sidebar-content">
         {activeTab === "connections" && (
-          <div className="sidebar-placeholder">
-            点击工具栏「连接」按钮配置数据库连接
+          <div className="connections-list">
+            <div className="connections-header">
+              <span>已保存 ({savedList.length})</span>
+              <button className="conn-new-btn" onClick={onNewConnection}>
+                新建
+              </button>
+            </div>
+            {savedList.length === 0 ? (
+              <div className="sidebar-placeholder">
+                暂无已保存的连接
+              </div>
+            ) : (
+              savedList.map((conn) => {
+                const isActive = conn.id === currentConnectionId;
+                return (
+                  <div
+                    key={conn.id}
+                    className={`conn-item${isActive ? " active" : ""}`}
+                  >
+                    <span className={`conn-icon type-${conn.config.type}`}>
+                      {conn.config.type === "sqlite"
+                        ? "SQLite"
+                        : conn.config.type === "postgresql"
+                          ? "PG"
+                          : conn.config.type === "mysql"
+                            ? "MY"
+                            : "RD"}
+                    </span>
+                    <div className="conn-info">
+                      <span className="conn-name">{conn.name}</span>
+                      <span className="conn-detail">
+                        {conn.config.type === "sqlite"
+                          ? conn.config.path
+                          : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`}
+                      </span>
+                    </div>
+                    <div className="conn-actions">
+                      <button
+                        className="conn-action"
+                        onClick={() => onConnect(conn.config)}
+                        title="连接"
+                      >
+                        连接
+                      </button>
+                      <button
+                        className="conn-action danger"
+                        onClick={() => {
+                          if (confirm(`确定要删除连接「${conn.name}」?`)) {
+                            removeSavedConnection(conn.id);
+                            refreshSaved();
+                          }
+                        }}
+                        title="删除"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
 

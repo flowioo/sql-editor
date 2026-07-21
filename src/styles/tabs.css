@@ -32,6 +32,25 @@
   border-bottom-color: var(--accent);
 }
 
+.tab-title {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-rename-input {
+  width: 140px;
+  padding: 2px 6px;
+  font-size: 0.95em;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  outline: none;
+}
+
 .tab-close {
   margin-left: 4px;
   opacity: 0;

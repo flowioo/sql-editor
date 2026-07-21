@@ -120,6 +120,62 @@
 .conn-status.online { background: var(--green); }
 .conn-status.offline { background: var(--text3); }
 
+.connections-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text3);
+}
+
+.conn-new-btn {
+  padding: 2px 8px;
+  font-size: 0.95em;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.conn-new-btn:hover {
+  background: rgba(124, 106, 239, 0.15);
+}
+
+.conn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.conn-action {
+  padding: 2px 8px;
+  font-size: 0.7em;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.conn-action:hover {
+  background: var(--accent-light);
+  color: var(--text);
+}
+
+.conn-action.danger:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--red);
+  border-color: var(--red);
+}
+
 .sidebar-placeholder {
   padding: 16px;
   color: var(--text3);

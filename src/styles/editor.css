@@ -72,15 +72,15 @@
 .sql-textarea {
   width: 100%;
   height: 100%;
-  background: #0f1117;
-  color: transparent;
+  background: transparent;       /* T-001h: 透明背景让 highlight 层穿透 */
+  color: transparent;            /* 透明字让 highlight 层的彩色 span 穿透可见 */
   border: none;
   outline: none;
   padding: 12px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 14px;
   resize: none;
-  caret-color: #7c6aef;
+  caret-color: #7c6aef;          /* 光标保留紫色可见 */
   line-height: 1.7;
   position: relative;
   z-index: 2;
@@ -88,6 +88,7 @@
 
 .sql-textarea::selection {
   background: rgba(59, 130, 246, 0.35);
+  color: #cdd1de;                /* 选区时给 textarea 临时上色，让选中的字可见 */
 }
 
 .sql-textarea:focus {
@@ -101,6 +102,7 @@
   right: 0;
   bottom: 0;
   padding: 12px;
+  background: #0f1117;          /* T-001h: textarea 透明后 hl 提供底色 */
   font-family: 'JetBrains Mono', monospace;
   font-size: 14px;
   line-height: 1.7;
@@ -109,6 +111,7 @@
   word-wrap: break-word;
   overflow: hidden;
   pointer-events: none;
+  user-select: none;            /* T-001h: 防止误选 highlight 层的彩色 span */
   z-index: 1;
 }
 

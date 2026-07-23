@@ -10,3 +10,5 @@ dist/
 # Tooling scratch space
 .hermes/
 .golutra/
+# git worktrees — local development branches
+.worktree/

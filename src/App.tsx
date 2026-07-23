@@ -6,6 +6,7 @@ import { SQLEditor } from "./editor/SQLEditor";
 import { StatusBar } from "./components/StatusBar";
 import { ResultTabs } from "./components/ResultTabs";
 import { UpdateConfirmDialog } from "./components/UpdateConfirmDialog";
+import { ToastProvider, useToast } from "./components/ui";
 import { ConsoleMessages } from "./components/ConsoleMessages";
 import { ConnectionDialog, type SavedConnection } from "./components/ConnectionDialog";
 import { clearResultGridPending } from "./components/ResultGrid";
@@ -39,7 +40,17 @@ function connIdFromConfig(c: import("./types/connection").ConnectionConfig): str
 }
 
 export default function App() {
+  // Wrap the real tree in <ToastProvider> so descendants can use useToast().
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  );
+}
+
+function AppInner() {
   const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent, renameTab } = useTabStore();
+  const toast = useToast();
   const [vimEnabled, setVimEnabled] = useState(true);
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
@@ -216,9 +227,10 @@ export default function App() {
         setActiveFilename(filename);
       } catch (e) {
         console.error("Failed to load file:", e);
+        toast.error("无法加载文件", String(e));
       }
     },
-    [loadFileContent, addTab],
+    [loadFileContent, addTab, toast],
   );
 
   const handleFileDelete = useCallback(
@@ -226,11 +238,13 @@ export default function App() {
       try {
         await deleteFile(filename);
         if (activeFilename === filename) setActiveFilename(null);
+        toast.success("文件已删除", filename);
       } catch (e) {
         console.error("Failed to delete file:", e);
+        toast.error("删除文件失败", String(e));
       }
     },
-    [deleteFile, activeFilename],
+    [deleteFile, activeFilename, toast],
   );
 
   /** Toolbar "+" button: open a new query window. If the active tab has
@@ -263,13 +277,17 @@ export default function App() {
     const batch = pendingUpdates.sqls.join("\n");
     try {
       await executeQuery(batch);
+      toast.success("更新已执行", `${pendingUpdates.sqls.length} 条语句`);
+    } catch (e) {
+      console.error("Failed to execute UPDATE:", e);
+      toast.error("更新失败", String(e));
     } finally {
       setPendingUpdates(null);
       // Clear staged edits on the grid so the user can re-run the SELECT
       // to see the post-update state without their pending changes lingering.
       clearResultGridPending();
     }
-  }, [pendingUpdates, executeQuery]);
+  }, [pendingUpdates, executeQuery, toast]);
 
   const handleCancelUpdates = useCallback(() => {
     setPendingUpdates(null);

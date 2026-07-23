@@ -7,6 +7,7 @@ import {
   type SavedConnection,
 } from "./ConnectionDialog";
 import { SchemaTree } from "./SchemaTree";
+import { Tooltip } from "./ui";
 import "../styles/sidebar.css";
 
 type SidebarTabKey = "connections" | "schema" | "history" | "files";
@@ -144,32 +145,35 @@ export function Sidebar({
                       </span>
                     </div>
                     <div className="conn-actions">
-                      <button
-                        className="conn-action"
-                        onClick={() => onConnect(conn.config)}
-                        title="连接"
-                      >
-                        连接
-                      </button>
-                      <button
-                        className="conn-action"
-                        onClick={() => onEditConnection(conn)}
-                        title="编辑连接参数"
-                      >
-                        编辑
-                      </button>
-                      <button
-                        className="conn-action danger"
-                        onClick={() => {
-                          if (confirm(`确定要删除连接「${conn.name}」?`)) {
-                            removeSavedConnection(conn.id);
-                            refreshSaved();
-                          }
-                        }}
-                        title="删除"
-                      >
-                        删除
-                      </button>
+                      <Tooltip content="连接">
+                        <button
+                          className="conn-action"
+                          onClick={() => onConnect(conn.config)}
+                        >
+                          连接
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="编辑连接参数">
+                        <button
+                          className="conn-action"
+                          onClick={() => onEditConnection(conn)}
+                        >
+                          编辑
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="删除">
+                        <button
+                          className="conn-action danger"
+                          onClick={() => {
+                            if (confirm(`确定要删除连接「${conn.name}」?`)) {
+                              removeSavedConnection(conn.id);
+                              refreshSaved();
+                            }
+                          }}
+                        >
+                          删除
+                        </button>
+                      </Tooltip>
                     </div>
                   </div>
                 );

@@ -6,7 +6,7 @@ import { SQLEditor } from "./editor/SQLEditor";
 import { StatusBar } from "./components/StatusBar";
 import { ResultTabs } from "./components/ResultTabs";
 import { UpdateConfirmDialog } from "./components/UpdateConfirmDialog";
-import { ToastProvider, useToast } from "./components/ui";
+import { ToastProvider, TooltipProvider, useToast } from "./components/ui";
 import { ConsoleMessages } from "./components/ConsoleMessages";
 import { ConnectionDialog, type SavedConnection } from "./components/ConnectionDialog";
 import { clearResultGridPending } from "./components/ResultGrid";
@@ -42,9 +42,11 @@ function connIdFromConfig(c: import("./types/connection").ConnectionConfig): str
 export default function App() {
   // Wrap the real tree in <ToastProvider> so descendants can use useToast().
   return (
-    <ToastProvider>
-      <AppInner />
-    </ToastProvider>
+    <TooltipProvider delayDuration={300}>
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
+    </TooltipProvider>
   );
 }
 

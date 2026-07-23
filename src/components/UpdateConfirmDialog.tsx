@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Dialog } from "./ui";
+import { Dialog, Tooltip } from "./ui";
 import "../styles/update-confirm-dialog.css";
 
 interface UpdateConfirmDialogProps {
@@ -70,13 +70,11 @@ export function UpdateConfirmDialog({
         <button className="btn-update-cancel" onClick={onCancel}>
           取消
         </button>
-        <button
-          className="btn-update-confirm"
-          onClick={onConfirm}
-          title="Ctrl/Cmd + Enter"
-        >
-          执行
-        </button>
+        <Tooltip content="Ctrl/Cmd + Enter">
+          <button className="btn-update-confirm" onClick={onConfirm}>
+            执行
+          </button>
+        </Tooltip>
       </div>
     </Dialog>
   );

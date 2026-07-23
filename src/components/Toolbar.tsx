@@ -1,5 +1,6 @@
 import type { ConnectionStatus } from "../hooks/useConnection";
 import type { ScanResult } from "../hooks/useCodebaseScan";
+import { Tooltip } from "./ui";
 import "../styles/toolbar.css";
 
 interface ToolbarProps {
@@ -47,18 +48,19 @@ export function Toolbar({
 }: ToolbarProps) {
   return (
     <div className="toolbar">
-      <button
-        className={`btn btn-connect ${connectionStatus}`}
-        onClick={connectionStatus === "connected" ? onDisconnect : onConnect}
-        title={connectionStatus === "connected" ? "断开连接" : "连接数据库"}
-      >
-        <span className={`status-dot ${connectionStatus}`} />
-        <span>
-          {connectionStatus === "connected"
-            ? (connectionName ?? "已连接")
-            : "连接"}
-        </span>
-      </button>
+      <Tooltip content={connectionStatus === "connected" ? "断开连接" : "连接数据库"}>
+        <button
+          className={`btn btn-connect ${connectionStatus}`}
+          onClick={connectionStatus === "connected" ? onDisconnect : onConnect}
+        >
+          <span className={`status-dot ${connectionStatus}`} />
+          <span>
+            {connectionStatus === "connected"
+              ? (connectionName ?? "已连接")
+              : "连接"}
+          </span>
+        </button>
+      </Tooltip>
 
       {connectionStatus === "connected" && (
         <>
@@ -99,21 +101,23 @@ export function Toolbar({
 
       <div className="spacer" />
 
-      <button
-        className={`btn btn-secondary ${vimEnabled ? "active" : ""}`}
-        onClick={onToggleVim}
-        title={vimEnabled ? "关闭 Vim 模式" : "开启 Vim 模式"}
-      >
-        <span>{vimEnabled ? (vimMode || "VIM") : "vim"}</span>
-      </button>
+      <Tooltip content={vimEnabled ? "关闭 Vim 模式" : "开启 Vim 模式"}>
+        <button
+          className={`btn btn-secondary ${vimEnabled ? "active" : ""}`}
+          onClick={onToggleVim}
+        >
+          <span>{vimEnabled ? (vimMode || "VIM") : "vim"}</span>
+        </button>
+      </Tooltip>
 
-      <button
-        className={`btn btn-secondary ${showAI ? "active" : ""}`}
-        onClick={onToggleAI}
-        title="AI 助手"
-      >
-        <span>AI</span>
-      </button>
+      <Tooltip content="AI 助手">
+        <button
+          className={`btn btn-secondary ${showAI ? "active" : ""}`}
+          onClick={onToggleAI}
+        >
+          <span>AI</span>
+        </button>
+      </Tooltip>
 
       {connectionStatus === "connected" && (
         <span className="toolbar-status">{STATUS_LABELS[connectionStatus]}</span>

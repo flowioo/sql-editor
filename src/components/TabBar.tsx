@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import type { QueryTab } from "../hooks/useTabStore";
+import { Tooltip } from "./ui";
 import "../styles/tabs.css";
 
 interface TabBarProps {
@@ -95,9 +96,11 @@ export function TabBar({
           </div>
         );
       })}
-      <button className="tab-add" onClick={() => onAddTab()} title="新建查询">
-        +
-      </button>
+      <Tooltip content="新建查询">
+        <button className="tab-add" onClick={() => onAddTab()}>
+          +
+        </button>
+      </Tooltip>
     </div>
   );
 }

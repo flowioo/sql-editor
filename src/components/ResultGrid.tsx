@@ -5,6 +5,7 @@ import {
   getColumnsForTable,
   getPrimaryKeyColumns,
 } from "../lib/schema-source";
+import { Tooltip } from "./ui";
 import "../styles/result-grid.css";
 
 interface ResultGridProps {
@@ -285,20 +286,22 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
         {pending.size > 0 && (
           <span className="result-pending">
             待提交: <strong>{pending.size}</strong> 处
-            <button
-              className="result-pending-cancel"
-              onClick={cancelAllPending}
-              title="丢弃所有待提交修改"
-            >
-              取消全部
-            </button>
-            <button
-              className="result-pending-submit"
-              onClick={handleSubmit}
-              title="生成 UPDATE 语句并弹出确认"
-            >
-              提交
-            </button>
+            <Tooltip content="丢弃所有待提交修改">
+              <button
+                className="result-pending-cancel"
+                onClick={cancelAllPending}
+              >
+                取消全部
+              </button>
+            </Tooltip>
+            <Tooltip content="生成 UPDATE 语句并弹出确认">
+              <button
+                className="result-pending-submit"
+                onClick={handleSubmit}
+              >
+                提交
+              </button>
+            </Tooltip>
           </span>
         )}
         {toastText && <span className="result-toast">{toastText}</span>}

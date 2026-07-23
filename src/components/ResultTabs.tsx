@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { StatementResult } from "../hooks/useQuery";
 import { ResultGrid } from "./ResultGrid";
+import { Tooltip } from "./ui";
 
 interface ResultTabsProps {
   readonly results: readonly StatementResult[];
@@ -44,14 +45,15 @@ export function ResultTabs({
           {queryResults.map((r, i) => {
             const label = `结果 ${i + 1}`;
             return (
-              <button
-                key={i}
-                className={`result-tab ${i === safeIndex ? "result-tab-active" : ""}`}
-                onClick={() => setActiveIndex(i)}
-                title={tabLabel(r, i)}
-              >
-                {label}
-              </button>
+              <Tooltip content={tabLabel(r, i)}>
+                <button
+                  key={i}
+                  className={`result-tab ${i === safeIndex ? "result-tab-active" : ""}`}
+                  onClick={() => setActiveIndex(i)}
+                >
+                  {label}
+                </button>
+              </Tooltip>
             );
           })}
         </div>

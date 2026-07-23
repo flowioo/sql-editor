@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ConnectionConfig } from "../types/connection";
-import { Dialog } from "./ui";
+import { Dialog, Tooltip } from "./ui";
 import "../styles/connection-dialog.css";
 
 const STORAGE_KEY = "sql-editor-saved-connections";
@@ -487,10 +487,18 @@ function SavedItem({ conn, onConnect, onDelete, onRename, onDuplicate }: SavedIt
         <span className="saved-detail">{detail}</span>
       </div>
       <div className="saved-actions" onClick={(e) => e.stopPropagation()}>
-        <button className="saved-action" onClick={onConnect} title="连接">连接</button>
-        <button className="saved-action" onClick={() => setEditing(true)} title="重命名">重命名</button>
-        <button className="saved-action" onClick={onDuplicate} title="复制">复制</button>
-        <button className="saved-action danger" onClick={onDelete} title="删除">删除</button>
+        <Tooltip content="连接这个数据库">
+          <button className="saved-action" onClick={onConnect}>连接</button>
+        </Tooltip>
+        <Tooltip content="重命名这个连接">
+          <button className="saved-action" onClick={() => setEditing(true)}>重命名</button>
+        </Tooltip>
+        <Tooltip content="复制为新连接">
+          <button className="saved-action" onClick={onDuplicate}>复制</button>
+        </Tooltip>
+        <Tooltip content="删除这个连接">
+          <button className="saved-action danger" onClick={onDelete}>删除</button>
+        </Tooltip>
       </div>
     </div>
   );

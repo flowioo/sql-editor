@@ -313,7 +313,8 @@ function HistoryItem({
 
   return (
     <div className="history-item">
-      <button className="history-item-main" onClick={onClick} title={entry.sql}>
+      <Tooltip content={entry.sql}>
+        <button className="history-item-main" onClick={onClick}>
         <div className="history-item-line1">
           <span className="history-item-time">{rel}</span>
           {entry.connectionName && (
@@ -333,6 +334,7 @@ function HistoryItem({
           )}
         </div>
       </button>
+      </Tooltip>
       <Tooltip content="删除这条历史">
         <button
           className="history-item-remove"
@@ -366,7 +368,8 @@ function FileItem({
 
   return (
     <div className={`history-item file-item${isActive ? " active" : ""}`}>
-      <button className="history-item-main" onClick={onClick} title={file.filename}>
+      <Tooltip content={file.filename}>
+        <button className="history-item-main" onClick={onClick}>
         <div className="history-item-line1">
           <span className="history-item-time">{timeStr}</span>
           {isActive && <span className="history-status ok">正在编辑</span>}
@@ -376,6 +379,7 @@ function FileItem({
           <span className="history-status muted">{sizeStr}</span>
         </div>
       </button>
+      </Tooltip>
       <Tooltip content="删除文件">
         <button
           className="history-item-remove"

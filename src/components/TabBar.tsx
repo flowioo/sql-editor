@@ -82,16 +82,17 @@ export function TabBar({
               <span className="tab-title">{tab.title}</span>
             )}
             {tabs.length > 1 && !isEditing && (
-              <span
-                className="tab-close"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void removeTab(tab.id);
-                }}
-                title="关闭"
-              >
-                ×
-              </span>
+              <Tooltip content="关闭查询">
+                <span
+                  className="tab-close"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void removeTab(tab.id);
+                  }}
+                >
+                  ×
+                </span>
+              </Tooltip>
             )}
           </div>
         );

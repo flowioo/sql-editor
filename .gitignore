@@ -4,3 +4,9 @@ src-tauri/target/
 .env
 .env.local
 .env.*.local
+# Build output
+dist/
+*.tsbuildinfo
+# Tooling scratch space
+.hermes/
+.golutra/

@@ -1,81 +1,8 @@
-/* UpdateConfirmDialog — modal confirm for staged inline edits */
+/* UpdateConfirmDialog — inner content of the Radix Dialog primitive.
+ * Overlay + outer panel come from .ui-dialog-overlay / .ui-dialog-content. */
 
-.update-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(2px);
-  animation: update-fade 0.12s ease-out;
-}
-
-@keyframes update-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.update-dialog {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
+.update-dialog-panel {
   width: min(720px, 92vw);
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-  font-family: var(--sans);
-  animation: update-slide 0.14s ease-out;
-}
-
-@keyframes update-slide {
-  from {
-    transform: translateY(-8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.update-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px 10px;
-  border-bottom: 1px solid var(--border);
-}
-
-.update-dialog-header h2 {
-  margin: 0;
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.update-close {
-  background: transparent;
-  border: none;
-  color: var(--text3);
-  font-size: 1.2em;
-  line-height: 1;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-family: inherit;
-}
-
-.update-close:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
 }
 
 .update-dialog-body {

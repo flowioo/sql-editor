@@ -98,11 +98,12 @@ function makeDefaultName(config: ConnectionConfig): string {
 }
 
 interface ConnectionDialogProps {
+  readonly editTarget?: SavedConnection | null;
   readonly onClose: () => void;
   readonly onConnect: (config: ConnectionConfig) => void;
 }
 
-export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) {
+export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onConnect }: ConnectionDialogProps) {
   const [mode, setMode] = useState<"saved" | "url" | "form">("saved");
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState("");
@@ -111,6 +112,10 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections);
+  // Driven by App via the prop so the same dialog instance can also be opened
+  // from Sidebar's "edit" button. When non-null, form is pre-filled and saving
+  // preserves the original id.
+  const editTarget = externalEditTarget ?? null;
 
   // SQLite
   const [sqlitePath, setSqlitePath] = useState("");
@@ -120,6 +125,28 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
   const [user, setUser] = useState("");
   const [password, setPassword] = useState("");
   const [database, setDatabase] = useState("");
+
+  // Pre-fill form whenever editTarget changes.
+  useEffect(() => {
+    if (!editTarget) return;
+    const c = editTarget.config;
+    setAlias(editTarget.name);
+    setTestResult(null);
+    setUrlInput("");
+    setUrlError("");
+    if (c.type === "sqlite") {
+      setActiveTab("sqlite");
+      setSqlitePath(c.path);
+    } else if (c.type === "postgresql" || c.type === "mysql") {
+      setActiveTab(c.type);
+      setHost(c.host);
+      setPort(c.port);
+      setUser(c.user);
+      setPassword(c.password);
+      setDatabase(c.database);
+    }
+    setMode("form");
+  }, [editTarget]);
 
   const DEFAULT_PORTS: Record<string, number> = { postgresql: 5432, mysql: 3306 };
 
@@ -155,15 +182,19 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
     }
   }, [buildConfig]);
 
-  const doConnectAndSave = useCallback((config: ConnectionConfig, name?: string) => {
+  const doConnectAndSave = useCallback((config: ConnectionConfig, name?: string, existingId?: string) => {
     const displayName = name || alias || makeDefaultName(config);
-    if (config.type === "sqlite") {
-      saveConnection({ id: config.path, name: displayName, config });
+    let id: string;
+    if (existingId) {
+      id = existingId;
+    } else if (config.type === "sqlite") {
+      id = config.path;
     } else if (config.type === "postgresql") {
-      saveConnection({ id: `postgresql://${config.user}@${config.host}:${config.port}/${config.database}`, name: displayName, config });
+      id = `postgresql://${config.user}@${config.host}:${config.port}/${config.database}`;
     } else {
-      saveConnection({ id: `mysql://${config.user}@${config.host}:${config.port}/${config.database}`, name: displayName, config });
+      id = `mysql://${config.user}@${config.host}:${config.port}/${config.database}`;
     }
+    saveConnection({ id, name: displayName, config });
     setSavedList(loadSavedConnections());
     onConnect(config);
   }, [alias, onConnect]);
@@ -171,18 +202,22 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
   const handleFormConnect = useCallback(() => {
     const config = buildConfig();
     if (!config) return;
-    doConnectAndSave(config);
-  }, [buildConfig, doConnectAndSave]);
+    doConnectAndSave(config, undefined, editTarget?.id);
+  }, [buildConfig, doConnectAndSave, editTarget]);
 
   const handleUrlConnect = useCallback(() => {
     const config = parseDatabaseUrl(urlInput.trim());
     if (!config) {
-      setUrlError("无法解析连接 URL，格式: postgresql://user:pass@host:port/database");
+      setUrlError("无法解析连接 URL，格式: postgresql://user:***@host:port/database");
       return;
     }
     setUrlError("");
-    doConnectAndSave(config);
-  }, [urlInput, doConnectAndSave]);
+    doConnectAndSave(config, undefined, editTarget?.id);
+  }, [urlInput, doConnectAndSave, editTarget]);
+
+  const handleCancelEdit = useCallback(() => {
+    onClose();
+  }, [onClose]);
 
   const handleSavedConnect = useCallback((conn: SavedConnection) => {
     onConnect(conn.config);
@@ -360,11 +395,14 @@ export function ConnectionDialog({ onClose, onConnect }: ConnectionDialogProps) 
             </div>
 
             <div className="connection-actions">
+              {editTarget && (
+                <button className="btn-dialog" onClick={handleCancelEdit}>取消编辑</button>
+              )}
               <button className="btn-dialog btn-test" onClick={handleTest} disabled={testing}>
                 {testing ? "测试中..." : "测试连接"}
               </button>
               <button className="btn-dialog btn-connect-dialog" onClick={handleFormConnect} disabled={!buildConfig()}>
-                连接并保存
+                {editTarget ? "保存并连接" : "连接并保存"}
               </button>
             </div>
           </>

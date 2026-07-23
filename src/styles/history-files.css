@@ -1,0 +1,201 @@
+/* ===========================================================
+ * history-files.css — temporary visual baseline.
+ * Real visual polish (motion, depth, badges, rewards) ships in a
+ * dedicated pass once the data layer is settled.
+ * For now: kill the bare-HTML look — dark surface, readable text,
+ * visible row separators, status chips, hover × delete.
+ * =========================================================== */
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-filter {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 0.78em;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sidebar-filter::placeholder {
+  color: var(--text3);
+}
+
+.sidebar-filter:focus {
+  border-color: var(--accent);
+}
+
+.history-count {
+  font-size: 0.7em;
+  color: var(--text3);
+  white-space: nowrap;
+}
+
+.history-clear {
+  font-size: 0.7em;
+  padding: 3px 8px;
+  background: transparent;
+  color: var(--text3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.history-clear:hover:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.history-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Each row: main button + remove × on the right */
+.history-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.history-item-main {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.history-item-line1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7em;
+  color: var(--text2);
+}
+
+.history-item-time {
+  color: var(--text3);
+}
+
+.history-item-conn {
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.history-item-preview {
+  font-size: 0.78em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+}
+
+.history-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7em;
+}
+
+.history-status {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.95em;
+  white-space: nowrap;
+}
+
+.history-status.ok {
+  color: var(--green);
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.history-status.error {
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.history-status.muted {
+  color: var(--text3);
+  background: var(--surface2);
+}
+
+/* Remove × button — hidden until row hover */
+.history-item-remove {
+  width: 28px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 1.2em;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s, background 0.1s;
+}
+
+.history-item:hover .history-item-remove {
+  opacity: 0.6;
+}
+
+.history-item-remove:hover {
+  opacity: 1 !important;
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+/* File item active state — same surface as conn-item.active */
+.history-item.file-item.active {
+  background: var(--accent-light);
+}
+
+.history-item.file-item.active .history-item-preview {
+  color: var(--accent);
+}
+
+.sidebar-placeholder.small {
+  padding: 6px 12px;
+  font-size: 0.7em;
+  text-align: left;
+  color: var(--text3);
+}

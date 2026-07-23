@@ -88,7 +88,7 @@
 
 .sql-textarea::selection {
   background: rgba(59, 130, 246, 0.35);
-  color: #cdd1de;                /* 选区时给 textarea 临时上色，让选中的字可见 */
+  color: #cdd1de;              /* 选区时给 textarea 临时上色，让选中的字可见 */
 }
 
 .sql-textarea:focus {
@@ -123,6 +123,15 @@
 .sql-keyword {
   color: #7c6aef;
   font-weight: 600;
+}
+
+.sql-function {
+  color: #56b6c2;
+  font-weight: 500;
+}
+
+.sql-identifier {
+  color: #e5c07b;
 }
 
 .sql-string {

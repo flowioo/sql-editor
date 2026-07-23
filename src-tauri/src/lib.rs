@@ -34,6 +34,9 @@ pub fn run() {
 
             schema::persist::ensure_cache_db(&cache_db_path)?;
 
+            // One-shot migration of pre-per-connection flat .sql files.
+            commands::files::migrate_flat_files_to_unassigned(app.handle())?;
+
             app.manage(AppState {
                 inner: Mutex::new(InnerState {
                     driver: None,
@@ -59,6 +62,8 @@ pub fn run() {
             commands::files::save_query_file,
             commands::files::read_query_file,
             commands::files::list_query_files,
+            commands::files::delete_query_file,
+            commands::files::list_all_query_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,8 +5,10 @@ import { TabBar } from "./components/TabBar";
 import { SQLEditor } from "./editor/SQLEditor";
 import { StatusBar } from "./components/StatusBar";
 import { ResultTabs } from "./components/ResultTabs";
+import { UpdateConfirmDialog } from "./components/UpdateConfirmDialog";
 import { ConsoleMessages } from "./components/ConsoleMessages";
-import { ConnectionDialog } from "./components/ConnectionDialog";
+import { ConnectionDialog, type SavedConnection } from "./components/ConnectionDialog";
+import { clearResultGridPending } from "./components/ResultGrid";
 import { AIPanel } from "./components/AIPanel";
 import { TableStructure } from "./components/TableStructure";
 import { useTabStore } from "./hooks/useTabStore";
@@ -19,14 +21,42 @@ import { useColumnDescriptions } from "./hooks/useColumnDescriptions";
 import { updateSchemaForAutocomplete } from "./editor/extensions";
 import "./styles/layout.css";
 import "./styles/result-tabs.css";
+import "./styles/history-files.css";
+import "./styles/update-confirm-dialog.css";
+
+/** Stable id used to bucket history / files per connection.
+ *  Mirrors the scheme in src-tauri/src/commands/files.rs::sanitize_conn_id
+ *  so the localStorage connectionId and the Rust-side subdirectory line up. */
+function connIdFromConfig(c: import("./types/connection").ConnectionConfig): string {
+  switch (c.type) {
+    case "sqlite":
+      return c.path;
+    case "postgresql":
+      return `postgresql://${c.user}@${c.host}:${c.port}/${c.database}`;
+    case "mysql":
+      return `mysql://${c.user}@${c.host}:${c.port}/${c.database}`;
+  }
+}
 
 export default function App() {
   const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent, renameTab } = useTabStore();
   const [vimEnabled, setVimEnabled] = useState(true);
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
+  const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
   const [showAI, setShowAI] = useState(false);
   const [structureTable, setStructureTable] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState<string>("NORMAL");
+  // Bumped whenever a connection is added/renamed/deleted; Sidebar re-reads
+  // localStorage on change so the list reflects the latest state.
+  const [savedConnectionsVersion, setSavedConnectionsVersion] = useState(0);
+  // Filename of the most recently opened .sql file, if any. Used by Sidebar
+  // to highlight the active row in the Files tab.
+  const [activeFilename, setActiveFilename] = useState<string | null>(null);
+  // Pending UPDATE batch waiting for user confirmation in the dialog.
+  const [pendingUpdates, setPendingUpdates] = useState<{
+    readonly sqls: readonly string[];
+    readonly changeCount: number;
+  } | null>(null);
 
   // Ref to get current content from editor
   const getContentRef = useRef<(() => string) | null>(null);
@@ -36,6 +66,7 @@ export default function App() {
   const {
     status: connStatus,
     displayName,
+    config: currentConfig,
     connect: doConnect,
     disconnect: doDisconnect,
   } = useConnection();
@@ -54,7 +85,16 @@ export default function App() {
     error: queryError,
     execute: executeQuery,
   } = useQuery();
-  const { history, savedFiles, addEntry, clearHistory, loadFileContent } = useQueryHistory();
+  const {
+    history,
+    savedFiles,
+    addEntry,
+    removeEntry,
+    clearHistory,
+    loadFileContent,
+    deleteFile,
+    saveCurrentAsFile,
+  } = useQueryHistory(currentConfig ? connIdFromConfig(currentConfig) : null);
   const { scanning, scanResult, scanCodebase } = useCodebaseScan();
   const { descriptions, loadDescriptions } = useColumnDescriptions();
 
@@ -96,30 +136,55 @@ export default function App() {
         addEntry({
           sql,
           executedAt: new Date().toISOString(),
+          connectionId: currentConfig ? connIdFromConfig(currentConfig) : null,
+          connectionName: displayName,
           databaseName: displayName,
           rowCount,
           error: queryError,
         });
       });
     },
-    [connStatus, executeQuery, addEntry, displayName, queryError],
+    [connStatus, executeQuery, addEntry, displayName, queryError, currentConfig],
   );
 
   const handleConnectionDialogConnect = useCallback(
     async (config: any) => {
       await doConnect(config);
+      setSavedConnectionsVersion((v) => v + 1);
       setShowConnectionDialog(false);
+      setEditingConnection(null);
     },
     [doConnect],
   );
 
+  const handleConnectionDialogClose = useCallback(() => {
+    // A new connection may have been added via URL/新建连接 + close.
+    setSavedConnectionsVersion((v) => v + 1);
+    setShowConnectionDialog(false);
+    setEditingConnection(null);
+  }, []);
+
+  const handleNewConnection = useCallback(() => {
+    setEditingConnection(null);
+    setShowConnectionDialog(true);
+  }, []);
+
+  const handleEditConnection = useCallback((conn: SavedConnection) => {
+    setEditingConnection(conn);
+    setShowConnectionDialog(true);
+  }, []);
+
   const handleHistorySelect = useCallback(
     (sql: string) => {
+      // Load AND run — re-running an old query is the common case.
       if (activeTabId) {
         updateTabContent(activeTabId, sql);
       }
+      if (connStatus === "connected") {
+        executeQuery(sql);
+      }
     },
-    [activeTabId, updateTabContent],
+    [activeTabId, updateTabContent, connStatus, executeQuery],
   );
 
   const handleTableSelect = useCallback(
@@ -148,12 +213,68 @@ export default function App() {
         const content = await loadFileContent(filename);
         const tabTitle = filename.replace(/^\d{8}_\d{6}_/, "").replace(/\.sql$/, "");
         addTab(`-- ${tabTitle}\n${content}`);
+        setActiveFilename(filename);
       } catch (e) {
         console.error("Failed to load file:", e);
       }
     },
     [loadFileContent, addTab],
   );
+
+  const handleFileDelete = useCallback(
+    async (filename: string) => {
+      try {
+        await deleteFile(filename);
+        if (activeFilename === filename) setActiveFilename(null);
+      } catch (e) {
+        console.error("Failed to delete file:", e);
+      }
+    },
+    [deleteFile, activeFilename],
+  );
+
+  /** Toolbar "+" button: open a new query window. If the active tab has
+   *  SQL content, snapshot it as a `.sql` file first (the "create query
+   *  window" gesture is the deliberate save point the user requested —
+   *  subsequent runs do not auto-save, so the file folder stays curated). */
+  const handleNewTab = useCallback(async () => {
+    const currentSql = getContentRef.current?.() ?? "";
+    if (currentSql.trim()) {
+      // Fire and forget — don't block the tab open on file I/O.
+      void saveCurrentAsFile(currentSql);
+    }
+    await addTab();
+  }, [addTab, saveCurrentAsFile]);
+
+  // ResultGrid calls this with one UPDATE per row that has staged edits.
+  // We don't run them yet — instead open a confirmation dialog so the user
+  // can review the SQL before it touches the database.
+  const handleStageUpdates = useCallback(
+    (sqls: readonly string[]) => {
+      if (sqls.length === 0) return;
+      if (connStatus !== "connected") return;
+      setPendingUpdates({ sqls, changeCount: sqls.length });
+    },
+    [connStatus],
+  );
+
+  const handleConfirmUpdates = useCallback(async () => {
+    if (!pendingUpdates) return;
+    const batch = pendingUpdates.sqls.join("\n");
+    try {
+      await executeQuery(batch);
+    } finally {
+      setPendingUpdates(null);
+      // Clear staged edits on the grid so the user can re-run the SELECT
+      // to see the post-update state without their pending changes lingering.
+      clearResultGridPending();
+    }
+  }, [pendingUpdates, executeQuery]);
+
+  const handleCancelUpdates = useCallback(() => {
+    setPendingUpdates(null);
+    // Staged edits intentionally stay on the grid so the user can revise.
+  }, []);
 
   const schemaContext = useMemo(() => {
     if (!schema) return "";
@@ -177,11 +298,16 @@ export default function App() {
         history={history}
         savedFiles={savedFiles}
         currentConnectionId={displayName}
+        activeFilename={activeFilename}
+        savedConnectionsVersion={savedConnectionsVersion}
         onHistorySelect={handleHistorySelect}
+        onHistoryRemove={removeEntry}
         onFileOpen={handleFileOpen}
+        onFileDelete={handleFileDelete}
         onClearHistory={clearHistory}
         onConnect={handleConnectionDialogConnect}
-        onNewConnection={() => setShowConnectionDialog(true)}
+        onNewConnection={handleNewConnection}
+        onEditConnection={handleEditConnection}
         onTableSelect={handleTableSelect}
         onTableStructure={setStructureTable}
       />
@@ -207,7 +333,7 @@ export default function App() {
         <TabBar
           tabs={tabs}
           activeTabId={activeTabId}
-          onAddTab={addTab}
+          onAddTab={handleNewTab}
           removeTab={removeTab}
           onSelectTab={setActiveTab}
           onRenameTab={renameTab}
@@ -237,9 +363,7 @@ export default function App() {
             <ResultTabs
               results={result.results}
               totalDurationMs={result.total_duration_ms}
-              onSubmitUpdate={(sql) => {
-                if (activeTabId) updateTabContent(activeTabId, sql);
-              }}
+              onSubmitUpdate={handleStageUpdates}
             />
             <ConsoleMessages results={result.results} />
           </>
@@ -259,7 +383,20 @@ export default function App() {
       )}
 
       {showConnectionDialog && (
-        <ConnectionDialog onClose={() => setShowConnectionDialog(false)} onConnect={handleConnectionDialogConnect} />
+        <ConnectionDialog
+          editTarget={editingConnection}
+          onClose={handleConnectionDialogClose}
+          onConnect={handleConnectionDialogConnect}
+        />
+      )}
+
+      {pendingUpdates && (
+        <UpdateConfirmDialog
+          sqls={pendingUpdates.sqls}
+          changeCount={pendingUpdates.changeCount}
+          onConfirm={handleConfirmUpdates}
+          onCancel={handleCancelUpdates}
+        />
       )}
     </div>
   );

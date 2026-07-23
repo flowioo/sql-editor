@@ -5,8 +5,9 @@ import { ResultGrid } from "./ResultGrid";
 interface ResultTabsProps {
   readonly results: readonly StatementResult[];
   readonly totalDurationMs: number;
-  /** Forwarded to the active ResultGrid so inline edits can submit UPDATE. */
-  readonly onSubmitUpdate?: (sql: string) => void;
+  /** Forwarded to the active ResultGrid so inline edits can submit a batch
+   *  of UPDATE statements (one per row with staged changes). */
+  readonly onSubmitUpdate?: (sqls: readonly string[]) => void;
 }
 
 const MAX_TAB_LABEL_LENGTH = 25;

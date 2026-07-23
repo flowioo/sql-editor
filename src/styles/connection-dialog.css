@@ -1,35 +1,10 @@
-.connection-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
+/* The Radix-backed <Dialog> primitive (src/components/ui/Dialog.tsx) renders
+ * its own overlay + content panel via .ui-dialog-overlay / .ui-dialog-content.
+ * This file now only styles the inner content specific to ConnectionDialog:
+ * mode tabs, forms, saved-list, action buttons. */
 
-.connection-dialog {
-  background: #1a1d2e;
-  border: 1px solid #2e3144;
-  border-radius: 12px;
-  width: 480px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-}
-
-.connection-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #2e3144;
-}
-
-.connection-header h2 {
-  margin: 0;
-  font-size: 16px;
-  color: #e1e4ed;
+.connection-dialog-panel {
+  width: min(640px, 92vw);
 }
 
 .connection-close {

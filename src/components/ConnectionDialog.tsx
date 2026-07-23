@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ConnectionConfig } from "../types/connection";
+import { Dialog } from "./ui";
 import "../styles/connection-dialog.css";
 
 const STORAGE_KEY = "sql-editor-saved-connections";
@@ -253,13 +254,15 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
   }, []);
 
   return (
-    <div className="connection-overlay" onClick={onClose}>
-      <div className="connection-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="connection-header">
-          <h2>连接数据库</h2>
-          <button className="connection-close" onClick={onClose}>x</button>
-        </div>
-
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="连接数据库"
+      panelClassName="connection-dialog-panel"
+    >
+      <>
         {/* Mode tabs */}
         <div className="connection-mode-tabs">
           <button className={mode === "saved" ? "active" : ""} onClick={() => { setMode("saved"); refreshSaved(); }}>
@@ -407,8 +410,8 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
             </div>
           </>
         )}
-      </div>
-    </div>
+      </>
+    </Dialog>
   );
 }
 

@@ -333,17 +333,18 @@ function HistoryItem({
           )}
         </div>
       </button>
-      <button
-        className="history-item-remove"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (confirm("删除这条历史记录?")) onRemove();
-        }}
-        title="删除"
-        aria-label="删除"
-      >
-        ×
-      </button>
+      <Tooltip content="删除这条历史">
+        <button
+          className="history-item-remove"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm("删除这条历史记录?")) onRemove();
+          }}
+          aria-label="删除"
+        >
+          ×
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -375,17 +376,18 @@ function FileItem({
           <span className="history-status muted">{sizeStr}</span>
         </div>
       </button>
-      <button
-        className="history-item-remove"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        title="删除文件"
-        aria-label="删除文件"
-      >
-        ×
-      </button>
+      <Tooltip content="删除文件">
+        <button
+          className="history-item-remove"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label="删除文件"
+        >
+          ×
+        </button>
+      </Tooltip>
     </div>
   );
 }

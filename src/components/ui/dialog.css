@@ -1,0 +1,99 @@
+/* ui/Dialog — standardised modal dialog styling.
+ * Animation: simple fade + slide-down on enter, fade on exit.
+ * Visual source of truth: src/styles/tokens.css. */
+
+.ui-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-bg);
+  z-index: 2000;
+  backdrop-filter: blur(2px);
+  animation: ui-dialog-fade var(--motion-base) ease-out;
+}
+
+.ui-dialog-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-xl);
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  box-shadow: var(--shadow-floating);
+  z-index: 2001;
+  font-family: var(--sans);
+  animation: ui-dialog-slide var(--motion-slow) ease-out;
+}
+
+.ui-dialog-content:focus {
+  outline: none;
+}
+
+.ui-dialog-title {
+  margin: 0;
+  padding: 14px 44px 10px 18px;
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.ui-dialog-description {
+  margin: 0;
+  padding: 8px 18px 0;
+  color: var(--text2);
+  font-size: 0.88em;
+  line-height: 1.45;
+}
+
+.ui-dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  transition: color var(--motion-fast), background var(--motion-fast);
+}
+
+.ui-dialog-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+@keyframes ui-dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ui-dialog-slide {
+  from {
+    transform: translate(-50%, calc(-50% - 8px));
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+}
+
+/* Optional sizing modifiers — applied via panelClassName prop. */
+.ui-dialog-content--wide {
+  width: min(720px, 92vw);
+}
+
+.ui-dialog-content--narrow {
+  width: min(420px, 92vw);
+}

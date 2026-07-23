@@ -1,0 +1,132 @@
+/* ui/Toast — bottom-right floating toast, swipe-to-dismiss.
+ * Variants: info (default), success, error, warning. */
+
+.ui-toast-viewport {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  z-index: 3000;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  outline: none;
+}
+
+.ui-toast {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 12px 36px 12px 14px;
+  box-shadow: var(--shadow-floating);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.9em;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "title close"
+    "desc desc";
+  gap: 2px 8px;
+}
+
+.ui-toast[data-state="open"] {
+  animation: ui-toast-slide-in var(--motion-base) ease-out;
+}
+
+.ui-toast[data-state="closed"] {
+  animation: ui-toast-fade-out var(--motion-base) ease-in;
+}
+
+.ui-toast[data-swipe="move"] {
+  transform: translateX(var(--radix-toast-swipe-move-x));
+}
+
+.ui-toast[data-swipe="end"] {
+  animation: ui-toast-swipe-out var(--motion-fast) ease-out;
+}
+
+/* Variant accent — a 3px left bar */
+.ui-toast::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--text2);
+}
+
+.ui-toast--success::before { background: var(--green); }
+.ui-toast--error::before   { background: var(--red); }
+.ui-toast--warning::before { background: var(--yellow); }
+.ui-toast--info::before    { background: var(--blue); }
+
+.ui-toast-title {
+  grid-area: title;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0;
+  /* Make space for the left accent bar */
+  padding-left: 10px;
+}
+
+.ui-toast-description {
+  grid-area: desc;
+  color: var(--text2);
+  font-size: 0.92em;
+  line-height: 1.4;
+  margin: 0;
+  padding-left: 10px;
+}
+
+.ui-toast-close {
+  grid-area: close;
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  align-self: start;
+}
+
+.ui-toast-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+@keyframes ui-toast-slide-in {
+  from {
+    transform: translateX(calc(100% + 16px));
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes ui-toast-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes ui-toast-swipe-out {
+  from {
+    transform: translateX(var(--radix-toast-swipe-end-x));
+    opacity: var(--radix-toast-swipe-end-x);
+  }
+  to {
+    transform: translateX(calc(100% + 16px));
+    opacity: 0;
+  }
+}

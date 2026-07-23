@@ -1,0 +1,95 @@
+/* ============================================================================
+ * Design Tokens — single source of truth for visual primitives.
+ *
+ * All CSS variables below are defined in `global.css`; this file documents
+ * what each one is for and adds a few semantic aliases that primitives
+ * should prefer over the raw palette.
+ *
+ * Adding a token:
+ *   1. Add the raw value in `:root` in global.css
+ *   2. Document it here in the matching section
+ *   3. If it's a "use this instead of X" alias, prefer it in primitives
+ *
+ * When to add a new token vs. reuse an existing one:
+ *   - New semantic meaning that 3+ components would reach for → add token
+ *   - One-off visual need → inline it; revisit if it spreads
+ * ========================================================================== */
+
+/* ---- Color palette (raw) ------------------------------------------------- */
+/* These are the only colors in the codebase. Everything else is a semantic
+ * alias built from these (see below). If you find yourself reaching for a
+ * hex/rgb that isn't here, add it to this list first. */
+
+:root {
+  /* Surface */
+  --bg: #0f1117;            /* page background, behind everything */
+  --surface: #1a1d27;        /* panels, dialogs, cards (default) */
+  --surface2: #242736;       /* nested surfaces, inputs */
+  --surface3: #2e3144;       /* hover state for surface2 */
+
+  /* Border */
+  --border: #2e3144;         /* default 1px divider */
+  --border2: #3a3d52;        /* stronger divider, focus ring */
+
+  /* Text */
+  --text: #e1e4ed;           /* primary */
+  --text2: #8b8fa3;          /* secondary / labels */
+  --text3: #5c6072;          /* tertiary / hints / disabled */
+
+  /* Accent (primary brand) */
+  --accent: #7c6aef;
+  --accent2: #5b4cc4;        /* hover/pressed */
+  --accent-light: rgba(124, 106, 239, 0.15);  /* tinted bg, selected state */
+
+  /* Semantic */
+  --green: #4ade80;          /* success, OK status, vim mode */
+  --blue: #60a5fa;           /* info, primary icon (PG) */
+  --orange: #fb923c;         /* warning-ish icon (MySQL) */
+  --red: #f87171;            /* error, destructive */
+  --yellow: #fbbf24;         /* caution, in-progress */
+
+  /* Vim mode (CodeMirror) */
+  --vim-green: #4ade80;
+  --vim-bg: #1a2e1a;
+
+  /* Typography */
+  --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+  --sans: 'Inter', -apple-system, 'SF Pro Display', 'Segoe UI', sans-serif;
+
+  /* Layout dimensions (do not use for visual style) */
+  --sidebar-w: 260px;
+  --toolbar-h: 44px;
+}
+
+/* ---- Semantic aliases (preferred over raw palette in primitives) --------- */
+
+/* Focus / keyboard navigation — always the accent border at 2px */
+:root {
+  --focus-ring: 2px solid var(--accent);
+}
+
+/* Standard radii used across primitives. Prefer these over ad-hoc px values. */
+:root {
+  --radius-sm: 3px;          /* tiny chips, tags */
+  --radius-md: 4px;          /* inputs, buttons */
+  --radius-lg: 6px;          /* dialog content, cards */
+  --radius-xl: 8px;          /* dialog outer */
+}
+
+/* Standard shadow used on floating surfaces (dialogs, tooltips, popovers). */
+:root {
+  --shadow-floating: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Standard backdrop tint for modal overlays. */
+:root {
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+}
+
+/* Motion durations — keep transitions consistent across primitives. */
+:root {
+  --motion-fast: 0.1s;
+  --motion-base: 0.15s;
+  --motion-slow: 0.3s;
+}

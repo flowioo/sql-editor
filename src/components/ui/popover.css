@@ -1,0 +1,30 @@
+/* ui/Popover — non-modal floating panel, mirrors dialog surface. */
+
+.ui-popover-content {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  box-shadow: var(--shadow-floating);
+  z-index: 3500;
+  font-family: var(--sans);
+  font-size: 0.88em;
+  max-width: 360px;
+  animation: ui-popover-in var(--motion-fast) ease-out;
+}
+
+.ui-popover-arrow {
+  fill: var(--surface);
+}
+
+@keyframes ui-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

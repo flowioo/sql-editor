@@ -1,0 +1,38 @@
+/* ui/Tooltip — small dark chip with arrow, fade + scale on enter. */
+
+.ui-tooltip {
+  background: var(--surface3);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.78em;
+  line-height: 1.4;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border2);
+  box-shadow: var(--shadow-overlay);
+  z-index: 4000;
+  max-width: 280px;
+  user-select: none;
+  animation: ui-tooltip-in var(--motion-fast) ease-out;
+}
+
+.ui-tooltip[data-state="delayed-open"],
+.ui-tooltip[data-state="instant-open"] {
+  animation: ui-tooltip-in var(--motion-fast) ease-out;
+}
+
+.ui-tooltip-arrow {
+  fill: var(--surface3);
+  /* Slight offset so the arrow tip aligns with the chip border */
+}
+
+@keyframes ui-tooltip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

@@ -23,9 +23,20 @@ import {
 export interface TauriMockOptions {
   /** Pre-seed a saved connection and mark it connected. */
   readonly connected?: boolean;
-  /** Pre-seed editor tab content. */
+  /** Pre-seed editor tab content. Defaults to the showcase join query. */
   readonly tabContent?: string;
 }
+
+const DEFAULT_TAB_CONTENT = `-- 演示查询：每个用户的订单汇总
+SELECT u.id, u.email, u.country,
+       COUNT(o.id) AS order_count,
+       SUM(o.total_amount) AS lifetime_value
+  FROM users u
+  JOIN orders o ON o.user_id = u.id
+ WHERE o.status = 'shipped'
+ GROUP BY u.id
+ ORDER BY lifetime_value DESC
+ LIMIT 50;`;
 
 /** Payload handed to the page; must be JSON-serialisable. */
 interface MockPayload {
@@ -33,6 +44,7 @@ interface MockPayload {
   readonly multiResult: unknown;
   readonly singleResult: unknown;
   readonly connectionName: string;
+  readonly defaultTabContent: string;
 }
 
 export async function installTauriMock(
@@ -44,6 +56,10 @@ export async function installTauriMock(
     multiResult: DEMO_MULTI_RESULT,
     singleResult: { results: [DEMO_JOIN_RESULT], total_duration_ms: 8 },
     connectionName: DEMO_CONNECTION.name,
+    // Inlined as a string because addInitScript serialises the function and
+    // re-runs it in the browser context — module-level constants from the
+    // outer file are not visible there.
+    defaultTabContent: options.tabContent ?? DEFAULT_TAB_CONTENT,
   };
 
   await page.addInitScript(
@@ -64,11 +80,14 @@ export async function installTauriMock(
             .filter(Boolean);
           return statements.length > 1 ? data.multiResult : data.singleResult;
         },
-        list_query_files: () => [
-          { filename: "top-customers.sql", modified: 1755500000, size: 214 },
-          { filename: "stale-inventory.sql", modified: 1755410000, size: 168 },
-        ],
-        read_query_file: () => "SELECT * FROM users LIMIT 100;",
+        list_query_files: (args) => {
+          const cid = String(args?.connectionId ?? "");
+          if (!cid) return [];
+          return [
+            { filename: "tab_demo-1.sql", modified: 1755500000, size: 412 },
+          ];
+        },
+        read_query_file: () => data.defaultTabContent,
         save_query_file: () => "/tmp/demo/queries/shop.db/untitled.sql",
         delete_query_file: () => null,
         scan_codebase: () => ({
@@ -76,6 +95,12 @@ export async function installTauriMock(
           columns_matched: 19,
           columns_unmatched: 3,
         }),
+        // Column descriptions are fetched per-table on connect. The real
+        // backend scans the project for matching field names; here we just
+        // pretend the inference succeeded so the UI is quiet.
+        // Hook expects ColumnDescription[] — returning `{}` makes
+        // `for (const d of result)` throw "result is not iterable".
+        get_column_descriptions: () => [],
       };
 
       let callbackId = 0;
@@ -107,6 +132,21 @@ export async function installTauriMock(
 
       if (seed.connected) {
         localStorage.setItem("sql-editor-saved-connections", JSON.stringify([seed.conn]));
+        // Pre-seed the tabs index so useTabStore's first effect finds files
+        // to load and the editor mounts with content instead of an empty
+        // textarea (which leaves the highlight overlay blank → blank shots).
+        localStorage.setItem(
+          "sql-editor-tabs-index",
+          JSON.stringify([
+            {
+              id: "tab-demo-1",
+              connId: seed.conn.id,
+              filename: "tab_demo-1.sql",
+              title: "top-customers",
+              createdAt: 1755500000,
+            },
+          ]),
+        );
       }
     },
     { data: payload, seed: { ...options, conn: DEMO_CONNECTION } },

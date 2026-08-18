@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background gradient: deep purple to blue -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B7AFF"/>
+      <stop offset="50%" stop-color="#6B5CE7"/>
+      <stop offset="100%" stop-color="#4A3FB8"/>
+    </linearGradient>
+
+    <!-- Top highlight gradient -->
+    <linearGradient id="topGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Cylinder body gradient -->
+    <linearGradient id="cylinder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="50%" stop-color="#F0EFFF"/>
+      <stop offset="100%" stop-color="#D4CCFF"/>
+    </linearGradient>
+
+    <!-- Cylinder shadow gradient -->
+    <linearGradient id="cylinderShade" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
+    </linearGradient>
+
+    <!-- SQL text gradient -->
+    <linearGradient id="sqlText" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5B4ED1"/>
+      <stop offset="100%" stop-color="#3A2DA0"/>
+    </linearGradient>
+
+    <!-- Soft shadow filter -->
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+      <feOffset dx="0" dy="6" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.4"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 3D rounded square base with 22% radius (iOS-style squircle) -->
+  <path d="M 512 32
+           C 768 32, 992 256, 992 512
+           C 992 768, 768 992, 512 992
+           C 256 992, 32 768, 32 512
+           C 32 256, 256 32, 512 32 Z"
+        fill="url(#bg)"/>
+
+  <!-- Top glow highlight -->
+  <path d="M 512 32
+           C 768 32, 992 256, 992 512
+           C 992 600, 950 700, 880 770
+           C 700 540, 320 540, 144 770
+           C 74 700, 32 600, 32 512
+           C 32 256, 256 32, 512 32 Z"
+        fill="url(#topGlow)" opacity="0.6"/>
+
+  <!-- Database cylinder (top ellipse) -->
+  <ellipse cx="512" cy="320" rx="260" ry="80" fill="url(#cylinder)" filter="url(#softShadow)"/>
+
+  <!-- Cylinder body -->
+  <path d="M 252 320
+           L 252 620
+           C 252 664, 368 700, 512 700
+           C 656 700, 772 664, 772 620
+           L 772 320"
+        fill="url(#cylinder)"/>
+
+  <!-- Right side shadow on cylinder -->
+  <path d="M 252 320
+           L 252 620
+           C 252 664, 368 700, 512 700
+           C 656 700, 772 664, 772 620
+           L 772 320"
+        fill="url(#cylinderShade)" opacity="0.4"/>
+
+  <!-- Middle disk line on cylinder -->
+  <ellipse cx="512" cy="470" rx="260" ry="80"
+           fill="none" stroke="#B8ACFF" stroke-width="3" opacity="0.6"/>
+
+  <!-- Bottom ellipse of cylinder -->
+  <ellipse cx="512" cy="620" rx="260" ry="80"
+           fill="none" stroke="#B8ACFF" stroke-width="3" opacity="0.5"/>
+
+  <!-- "SQL" text -->
+  <text x="512" y="500" text-anchor="middle"
+        font-family="Helvetica, Arial, sans-serif" font-size="180"
+        font-weight="bold" fill="url(#sqlText)">SQL</text>
+
+  <!-- Subtle inner border for depth -->
+  <path d="M 512 50
+           C 754 50, 974 270, 974 512
+           C 974 754, 754 974, 512 974
+           C 270 974, 50 754, 50 512
+           C 50 270, 270 50, 512 50 Z"
+        fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.2"/>
+</svg>

@@ -1,14 +1,17 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
-use db::Driver;
+use application::ports::DriverGateway;
 use schema::cache::SchemaCache;
 
+pub mod application;
 mod commands;
-mod db;
-mod schema;
+mod credentials;
+pub mod db;
+pub mod domain;
+pub mod schema;
 
 pub struct InnerState {
-    pub driver: Option<Driver>,
+    pub driver: Option<Arc<dyn DriverGateway>>,
     pub schema_cache: SchemaCache,
     pub current_connection_key: Option<String>,
 }
@@ -32,10 +35,26 @@ pub fn run() {
                 .to_string_lossy()
                 .to_string();
 
-            schema::persist::ensure_cache_db(&cache_db_path)?;
+            // Cache is best-effort: a corrupted cache must not prevent the
+            // app from starting. Log + continue; cache reads/writes will
+            // report failures at the call site and the user keeps full
+            // functionality against the live database.
+            if let Err(e) = schema::persist::ensure_cache_db(&cache_db_path) {
+                eprintln!("[startup] 缓存数据库初始化失败，缓存功能将不可用: {}", e);
+            }
 
-            // One-shot migration of pre-per-connection flat .sql files.
-            commands::files::migrate_flat_files_to_unassigned(app.handle())?;
+            // One-shot migration of pre-per-connection flat .sql files —
+            // also best-effort (file moves on disk can fail under sandbox
+            // restrictions without breaking app launch).
+            if let Err(e) = commands::files::migrate_flat_files_to_unassigned(app.handle()) {
+                eprintln!("[startup] 迁移旧查询文件失败: {}", e);
+            }
+            // One-shot migration: strip legacy `:***` from cached
+            // connection keys — same best-effort posture as the file
+            // migration.
+            if let Err(e) = commands::files::migrate_connection_keys(app.handle()) {
+                eprintln!("[startup] 迁移缓存键失败: {}", e);
+            }
 
             app.manage(AppState {
                 inner: Mutex::new(InnerState {
@@ -50,7 +69,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::connection::connect,
-            commands::connection::connect_sqlite,
             commands::connection::disconnect,
             commands::connection::test_connection_cmd,
             commands::query::execute_query,
@@ -64,6 +82,9 @@ pub fn run() {
             commands::files::list_query_files,
             commands::files::delete_query_file,
             commands::files::list_all_query_files,
+            credentials::store_password,
+            credentials::load_password,
+            credentials::delete_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -11,8 +11,8 @@ pub async fn execute_query(
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
         inner.driver.as_ref()
             .ok_or("未连接到数据库".to_string())?
-            .clone()  // Driver is Clone via Arc
+            .clone()  // Arc<dyn DriverGateway> is Clone
     };
 
-    driver.execute_multi_query(&sql).await
+    crate::application::ports::execute_multi_query(driver.as_ref(), &sql).await
 }

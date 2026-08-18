@@ -1,14 +1,32 @@
 use std::sync::Mutex;
 use sqlx::MySqlPool;
-use sqlx::mysql::MySqlRow;
+use sqlx::mysql::MySqlConnectOptions;
 use sqlx::{Row as SqlxRow, Column as SqlxColumn};
-use crate::db::{QueryResult, StatementResult};
+use futures::StreamExt;
+use crate::application::ports::DriverGateway;
+use crate::db::{StatementResult, StmtKind, classify_statement, decode_cell};
+use crate::db::sqlx_common::MAX_ROWS;
+use crate::domain::sql::Dialect;
 use crate::schema::{DatabaseSchema, Index, Table, Column};
 
-const MAX_ROWS: usize = 10_000;
+/// Map a sqlx error to a user-facing message that never contains the
+/// connection string or password. DB-side messages are safe to surface —
+/// they originate from the server, not from our credentials.
+fn classify_mysql_error(e: &sqlx::Error) -> String {
+    match e {
+        sqlx::Error::Io(_) => "无法连接到数据库服务器（网络不可达或服务未启动）".to_string(),
+        sqlx::Error::Database(db) => match db.code().as_deref() {
+            // 1045 = access denied; 1049 = unknown database.
+            Some("1045") => "数据库认证失败（用户名或密码错误）".to_string(),
+            Some("1049") => "数据库不存在".to_string(),
+            _ => format!("数据库返回错误: {}", db.message()),
+        },
+        _ => "连接数据库失败，请检查主机、端口和数据库配置".to_string(),
+    }
+}
 
 pub struct MySqlDriver {
-    pool: Mutex<Option<MySqlPool>>,
+    pool: Mutex<MySqlPool>,
     conn_key: String,
 }
 
@@ -21,83 +39,39 @@ impl MySqlDriver {
         database: &str,
         url: Option<&str>,
     ) -> Result<Self, String> {
-        let connection_url = url.map(|s| s.to_string()).unwrap_or_else(|| {
-            format!("mysql://{}:{}@{}:{}/{}", user, password, host, port, database)
-        });
-        let pool = MySqlPool::connect(&connection_url)
+        // Build connect options WITHOUT embedding credentials into a URL
+        // string. Using MySqlConnectOptions directly avoids ever materializing
+        // a `mysql://user:password@host` string that could leak via error
+        // messages or logs, and correctly handles passwords containing
+        // URL-special characters (@, :, /, %, ...).
+        let opts: MySqlConnectOptions = match url {
+            Some(u) => u
+                .parse()
+                .map_err(|_| "无效的 MySQL 连接 URL".to_string())?,
+            None => MySqlConnectOptions::new()
+                .host(host)
+                .port(port)
+                .username(user)
+                .password(password)
+                .database(database),
+        };
+
+        let pool = MySqlPool::connect_with(opts)
             .await
-            .map_err(|e| format!("无法连接 MySQL: {}", e))?;
+            .map_err(|e| classify_mysql_error(&e))?;
 
         // Verify connection works
         sqlx::query("SELECT 1")
             .execute(&pool)
             .await
-            .map_err(|e| format!("连接测试失败: {}", e))?;
+            .map_err(|e| classify_mysql_error(&e))?;
 
         let conn_key = format!("mysql://{}@{}:{}/{}", user, host, port, database);
         Ok(Self {
-            pool: Mutex::new(Some(pool)),
+            pool: Mutex::new(pool),
             conn_key,
         })
     }
-
-    pub fn connection_key(&self) -> &str {
-        &self.conn_key
-    }
-}
-
-async fn execute_query_async(pool: &MySqlPool, sql: &str) -> Result<QueryResult, String> {
-    let rows: Vec<MySqlRow> = match sqlx::query(sql).fetch_all(pool).await {
-        Ok(r) => r,
-        Err(_) => {
-            let result = sqlx::query(sql)
-                .execute(pool)
-                .await
-                .map_err(|e| format!("SQL 执行错误: {}", e))?;
-            return Ok(QueryResult {
-                columns: vec!["影响行数".to_string()],
-                rows: vec![vec![Some(result.rows_affected().to_string())]],
-                affected_rows: result.rows_affected(),
-                truncated: false,
-            });
-        }
-    };
-
-    let columns: Vec<String> = if rows.is_empty() {
-        vec![]
-    } else {
-        rows[0].columns().iter().map(|c| c.name().to_string()).collect()
-    };
-
-    let column_count = columns.len();
-    let mut result_rows: Vec<Vec<Option<String>>> = Vec::new();
-    let mut truncated = false;
-
-    for row in &rows {
-        if result_rows.len() >= MAX_ROWS {
-            truncated = true;
-            break;
-        }
-        let mut row_data: Vec<Option<String>> = Vec::with_capacity(column_count);
-        for i in 0..column_count {
-            let val: Option<String> = row.try_get(i)
-                .ok()
-                .or_else(|| row.try_get::<Option<&str>, _>(i).ok().flatten().map(|s| s.to_string()))
-                .or_else(|| row.try_get::<Option<i64>, _>(i).ok().flatten().map(|n| n.to_string()))
-                .or_else(|| row.try_get::<Option<f64>, _>(i).ok().flatten().map(|f| f.to_string()))
-                .or_else(|| row.try_get::<Option<bool>, _>(i).ok().flatten().map(|b| b.to_string()));
-            row_data.push(val);
-        }
-        result_rows.push(row_data);
-    }
-
-    let affected = result_rows.len() as u64;
-    Ok(QueryResult {
-        columns,
-        rows: result_rows,
-        affected_rows: affected,
-        truncated,
-    })
 }
 
 async fn get_mysql_columns(pool: &MySqlPool, table_name: &str) -> Result<Vec<Column>, String> {
@@ -188,92 +162,80 @@ async fn get_schema_async(pool: &MySqlPool, conn_key: &str) -> Result<DatabaseSc
 }
 
 impl MySqlDriver {
-    pub async fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
-        let pool = {
-            let guard = self.pool.lock().map_err(|e| e.to_string())?;
-            guard.as_ref().cloned().ok_or("连接已关闭".to_string())?
-        };
-        execute_query_async(&pool, sql).await
-    }
-
     pub async fn get_schema(&self) -> Result<DatabaseSchema, String> {
-        let pool = {
-            let guard = self.pool.lock().map_err(|e| e.to_string())?;
-            guard.as_ref().cloned().ok_or("连接已关闭".to_string())?
-        };
+        let pool = self.pool.lock().map_err(|e| e.to_string())?.clone();
         get_schema_async(&pool, &self.conn_key).await
     }
 
-    pub fn test_connection(&self) -> Result<(), String> {
-        Ok(())
-    }
-
     pub async fn execute_single(&self, sql: &str) -> Result<StatementResult, String> {
-        let pool = {
-            let guard = self.pool.lock().map_err(|e| e.to_string())?;
-            guard.as_ref().cloned().ok_or("连接已关闭".to_string())?
-        };
+        let pool = self.pool.lock().map_err(|e| e.to_string())?.clone();
 
-        // Try to fetch_all first (SELECT-like queries)
-        match sqlx::query(sql).fetch_all(&pool).await {
-            Ok(rows) => {
-                let columns: Vec<String> = if rows.is_empty() {
-                    vec![]
-                } else {
-                    rows[0].columns().iter().map(|c| c.name().to_string()).collect()
-                };
-
-                let column_count = columns.len();
-                let mut result_rows: Vec<Vec<Option<String>>> = Vec::new();
-                let mut truncated = false;
-
-                for row in &rows {
-                    if result_rows.len() >= MAX_ROWS {
-                        truncated = true;
-                        break;
-                    }
-                    let mut row_data: Vec<Option<String>> = Vec::with_capacity(column_count);
-                    for i in 0..column_count {
-                        let val: Option<String> = row.try_get(i)
-                            .ok()
-                            .or_else(|| row.try_get::<Option<&str>, _>(i).ok().flatten().map(|s| s.to_string()))
-                            .or_else(|| row.try_get::<Option<i64>, _>(i).ok().flatten().map(|n| n.to_string()))
-                            .or_else(|| row.try_get::<Option<f64>, _>(i).ok().flatten().map(|f| f.to_string()))
-                            .or_else(|| row.try_get::<Option<bool>, _>(i).ok().flatten().map(|b| b.to_string()));
-                        row_data.push(val);
-                    }
-                    result_rows.push(row_data);
-                }
-
-                let affected = result_rows.len() as u64;
-                Ok(StatementResult {
-                    sql: sql.to_string(),
-                    columns,
-                    rows: result_rows,
-                    affected_rows: affected,
-                    truncated,
-                    is_query: true,
-                    error: None,
-                })
-            }
-            Err(_) => {
-                // Fallback to execute (DML/DDL)
-                let result = sqlx::query(sql)
-                    .execute(&pool)
-                    .await
-                    .map_err(|e| format!("SQL 执行错误: {e}"))?;
-
-                let affected = result.rows_affected();
-                Ok(StatementResult {
-                    sql: sql.to_string(),
-                    columns: vec!["影响行数".to_string()],
-                    rows: vec![vec![Some(affected.to_string())]],
-                    affected_rows: affected,
-                    truncated: false,
-                    is_query: false,
-                    error: None,
-                })
-            }
+        // DML/DDL path — never attempt fetch_all for writes.
+        if classify_statement(sql) == StmtKind::Execute {
+            let result = sqlx::query(sql)
+                .execute(&pool)
+                .await
+                .map_err(|e| format!("SQL 执行错误: {e}"))?;
+            let affected = result.rows_affected();
+            return Ok(StatementResult {
+                sql: sql.to_string(),
+                columns: vec!["影响行数".to_string()],
+                rows: vec![vec![Some(affected.to_string())]],
+                affected_rows: affected,
+                truncated: false,
+                is_query: false,
+                error: None,
+            });
         }
+
+        let mut columns: Vec<String> = Vec::new();
+        let mut result_rows: Vec<Vec<Option<String>>> = Vec::new();
+        let mut truncated = false;
+        let mut column_count = 0usize;
+
+        // Stream rows instead of `fetch_all` — same memory-bound rationale
+        // as the Postgres driver: a SELECT * without LIMIT could otherwise
+        // exhaust RAM.
+        let mut stream = sqlx::query(sql).fetch(&pool);
+        while let Some(row_result) = stream.next().await {
+            let row = row_result.map_err(|e| format!("SQL 执行错误: {e}"))?;
+            if columns.is_empty() {
+                columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+                column_count = columns.len();
+            }
+            if result_rows.len() >= MAX_ROWS {
+                truncated = true;
+                break;
+            }
+            let mut row_data: Vec<Option<String>> = Vec::with_capacity(column_count);
+            for i in 0..column_count {
+                row_data.push(decode_cell!(row, i));
+            }
+            result_rows.push(row_data);
+        }
+
+        let affected = result_rows.len() as u64;
+        Ok(StatementResult {
+            sql: sql.to_string(),
+            columns,
+            rows: result_rows,
+            affected_rows: affected,
+            truncated,
+            is_query: true,
+            error: None,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl DriverGateway for MySqlDriver {
+    async fn execute_single(&self, sql: &str) -> Result<StatementResult, String> {
+        MySqlDriver::execute_single(self, sql).await
+    }
+    async fn get_schema(&self) -> Result<crate::schema::DatabaseSchema, String> {
+        MySqlDriver::get_schema(self).await
+    }
+    fn dialect(&self) -> Option<Dialect> {
+        Some(Dialect::mysql())
     }
 }

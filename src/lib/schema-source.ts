@@ -1,20 +1,68 @@
 import type { DatabaseSchema } from "../hooks/useSchema";
 
 /**
- * Completion item shape. Designed to be framework-agnostic so it can be
- * consumed by both CodeMirror (legacy schemaCompletionSource) and the
- * textarea-based vim editor (SQLEditor).
+ * Completion item shape. Framework-agnostic — consumed by the
+ * textarea-based SQL editor (SQLEditor).
  */
 export interface SchemaCompletion {
   readonly label: string;
-  readonly type: "table" | "column" | "keyword" | "function";
+  readonly type: "table" | "column" | "keyword" | "function" | "command";
   readonly detail: string;
   readonly apply: string;
 }
 
 export type CompletionKind = "table-context" | "column-context" | "default";
 
-let cachedSchema: DatabaseSchema | null = null;
+/** SQL/Redis dialect — controls identifier quoting, completion shape, and
+ *  string escaping. "redis" yields command-name completions only. */
+export type SqlDialect = "sqlite" | "postgresql" | "mysql" | "redis";
+
+const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+// A pragmatic set of reserved words that must be quoted when used as an
+// identifier. Not exhaustive — covers the common offenders.
+const RESERVED_IDENTIFIERS = new Set([
+  "select", "from", "where", "order", "group", "by", "having", "limit",
+  "offset", "insert", "into", "values", "update", "set", "delete", "create",
+  "drop", "alter", "table", "index", "view", "primary", "key", "foreign",
+  "references", "default", "null", "not", "and", "or", "unique", "database",
+  "schema", "user", "check", "constraint", "as", "on", "join", "inner",
+  "left", "right", "full", "cross", "union", "all", "distinct", "case",
+  "when", "then", "else", "end", "between", "like", "in", "is", "exists",
+  "asc", "desc", "with", "returning",
+]);
+
+/**
+ * Quote an SQL identifier (table/column name) if it needs quoting: contains
+ * non-word chars, starts with a digit, or is a reserved word. Uses backticks
+ * for MySQL, double quotes for PostgreSQL/SQLite (standard SQL).
+ */
+export function quoteIdentifier(name: string, dialect: SqlDialect): string {
+  const needsQuote =
+    !IDENT_RE.test(name) || RESERVED_IDENTIFIERS.has(name.toLowerCase());
+  if (!needsQuote) return name;
+  if (dialect === "mysql") {
+    return "`" + name.replace(/`/g, "``") + "`";
+  }
+  return '"' + name.replace(/"/g, '""') + '"';
+}
+
+/**
+ * Render a value as an SQL string literal (or NULL). Doubles single quotes
+ * per the SQL standard; for MySQL also escapes backslashes (default
+ * sql_mode treats `\` as an escape char).
+ */
+export function quoteSql(
+  value: string | null,
+  dialect: SqlDialect = "postgresql",
+): string {
+  if (value === null) return "NULL";
+  let escaped = value.replace(/'/g, "''");
+  if (dialect === "mysql") {
+    escaped = escaped.replace(/\\/g, "\\\\");
+  }
+  return `'${escaped}'`;
+}
 
 const SQL_KEYWORDS: readonly string[] = [
   "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "IN", "EXISTS",
@@ -26,6 +74,7 @@ const SQL_KEYWORDS: readonly string[] = [
   "DISTINCT", "UNION", "ALL", "ASC", "DESC",
   "CASE", "WHEN", "THEN", "ELSE", "END",
   "TRUE", "FALSE", "CAST", "DEFAULT",
+  "WITH", "RETURNING",
 ];
 
 const SQL_FUNCTIONS: readonly string[] = [
@@ -41,15 +90,25 @@ const SQL_FUNCTIONS: readonly string[] = [
   "TYPEOF",
 ];
 
-/** Replace the cached schema. Called from App.tsx when useSchema updates. */
-export function setSchema(schema: DatabaseSchema | null): void {
-  cachedSchema = schema;
-}
-
-/** Read-only access for tests and the SQLEditor dropdown. */
-export function getCachedSchema(): DatabaseSchema | null {
-  return cachedSchema;
-}
+const REDIS_COMMANDS: readonly string[] = [
+  "GET", "SET", "MGET", "MSET", "GETSET", "APPEND", "STRLEN",
+  "GETRANGE", "SETRANGE", "INCR", "INCRBY", "INCRBYFLOAT", "DECR", "DECRBY",
+  "DEL", "EXISTS", "KEYS", "SCAN", "TYPE", "TTL", "EXPIRE", "PEXPIRE",
+  "EXPIREAT", "PERSIST", "RENAME", "RENAMENX", "RANDOMKEY", "DBSIZE",
+  "FLUSHDB", "FLUSHALL",
+  "HSET", "HGET", "HMSET", "HMGET", "HGETALL", "HDEL", "HEXISTS",
+  "HKEYS", "HVALS", "HLEN", "HINCRBY",
+  "LPUSH", "RPUSH", "LPOP", "RPOP", "LLEN", "LRANGE", "LINDEX",
+  "LSET", "LREM", "LINSERT", "RPOPLPUSH",
+  "SADD", "SMEMBERS", "SREM", "SISMEMBER", "SCARD", "SPOP",
+  "SRANDMEMBER", "SUNION", "SINTER", "SDIFF",
+  "ZADD", "ZRANGE", "ZSCORE", "ZCARD", "ZREM", "ZRANGEBYSCORE",
+  "ZINCRBY", "ZCOUNT",
+  "SUBSCRIBE", "UNSUBSCRIBE", "PUBLISH", "PUBSUB",
+  "INFO", "PING", "ECHO", "TIME", "SAVE", "BGSAVE", "SHUTDOWN",
+  "CONFIG", "CLIENT", "DEBUG",
+  "MULTI", "EXEC", "DISCARD", "WATCH", "UNWATCH",
+];
 
 /**
  * Extract the referenced table name from a SQL statement. Handles the
@@ -91,9 +150,12 @@ export function extractTableFromSql(sql: string): string | null {
  * cached schema. Returns [] if the schema isn't loaded or the table
  * has no primary key (we then fall back to all columns).
  */
-export function getPrimaryKeyColumns(tableName: string): string[] {
-  if (!cachedSchema) return [];
-  const table = cachedSchema.tables.find(
+export function getPrimaryKeyColumns(
+  tableName: string,
+  schema: DatabaseSchema | null,
+): string[] {
+  if (!schema) return [];
+  const table = schema.tables.find(
     (t) => t.name.toLowerCase() === tableName.toLowerCase(),
   );
   if (!table) return [];
@@ -103,20 +165,17 @@ export function getPrimaryKeyColumns(tableName: string): string[] {
 /**
  * Return all column names for a given table.
  */
-export function getColumnsForTable(tableName: string): string[] {
-  if (!cachedSchema) return [];
-  const table = cachedSchema.tables.find(
+export function getColumnsForTable(
+  tableName: string,
+  schema: DatabaseSchema | null,
+): string[] {
+  if (!schema) return [];
+  const table = schema.tables.find(
     (t) => t.name.toLowerCase() === tableName.toLowerCase(),
   );
   return table ? table.columns.map((c) => c.name) : [];
 }
 
-/**
- * Extract the current word being typed at position.
- * "Current" = the contiguous [\w.] run immediately preceding pos.
- * Returns { word, start } where start is the byte offset of word[0].
- * Returns null if cursor is at a word boundary (waiting for new input).
- */
 /**
  * Returns the kind of token immediately preceding `pos`:
  *   - "word": preceding chars form an in-progress word ([\w.] run)
@@ -139,13 +198,7 @@ export function getCursorContext(
   let i = pos - 1;
   while (i >= 0) {
     const c = text[i];
-    // Quick word-char test — most common case.
     if (/[\w.]/.test(c)) {
-      // Don't trust the word-char in isolation — make sure we're
-      // not inside a string or comment. Walk back further to verify.
-      // For simplicity, scan again from pos-1 with a proper state
-      // machine if we hit word chars inside an unbalanced context.
-      // (See classifyAt below.)
       const ctx = classifyAt(text, pos);
       return ctx === "word" ? "word" : ctx;
     }
@@ -156,18 +209,14 @@ export function getCursorContext(
       return classifyAt(text, pos);
     }
     if (c === "-" && text[i + 1] === "-") {
-      // line comment — confirm no newline between i+1 and pos
       const rest = text.slice(i, pos);
       if (!rest.includes("\n")) return "comment";
       return classifyAt(text, pos);
     }
     if (c === "*" && text[i + 1] === "/") {
-      // closing */  — we're after a block comment, not inside
       return classifyAt(text, pos);
     }
     if (c === "/" && text[i + 1] === "*") {
-      // opening /* — but only "inside" if there's no matching */
-      // before pos. We just hit /* so look right for */.
       const closeAt = text.indexOf("*/", i + 2);
       if (closeAt === -1 || closeAt >= pos) return "comment";
       return classifyAt(text, pos);
@@ -177,17 +226,10 @@ export function getCursorContext(
   return classifyAt(text, pos);
 }
 
-/**
- * Full state-machine classification at position `pos` in `text`.
- * Walks left tracking string/comment state to determine if `pos`
- * is inside a string or comment. Used as a fallback when the
- * simple left-scan hits a word char or non-state-tracking token.
- */
 function classifyAt(
   text: string,
   pos: number,
 ): "word" | "boundary" | "string" | "comment" {
-  // State: walk left, track current context.
   let inSingle = false;
   let inDouble = false;
   let inLineComment = false;
@@ -226,18 +268,13 @@ function classifyAt(
     else if (c === '"') inDouble = true;
   }
 
-  // Check what's at pos.
   if (inLineComment || blockCommentDepth > 0) return "comment";
   if (inSingle || inDouble) return "string";
-  // Walk back from pos to classify boundary/word.
   let j = pos - 1;
   while (j >= lineStart && (text[j] === " " || text[j] === "\t")) j--;
   if (j < lineStart) return "boundary";
   const c = text[j];
   if (/[\w.]/.test(c)) {
-    // j is on word char; check that we're really at end of word, not
-    // mid-word where the user is typing — if pos-1 is also word char,
-    // we're mid-word (return "word"); if pos-1 is non-word, end-of-word.
     const prev = text[pos - 1];
     return /[\w.]/.test(prev) ? "word" : "boundary";
   }
@@ -273,6 +310,103 @@ export function detectContext(textBefore: string): CompletionKind {
   return "default";
 }
 
+// ---------------------------------------------------------------------------
+// Prefix index. Building it once per schema keeps `getCompletions` O(matching
+// rows in namespace) instead of O(tables × columns × matched rows). For a
+// schema with 1k tables × 30 columns the naïve scan runs 30k startsWith calls
+// per keystroke; the index trims this to ~O(prefix length × buckets).
+// ---------------------------------------------------------------------------
+
+interface CompletionIndex {
+  /** lower-case table name → completion item. */
+  readonly tables: ReadonlyMap<string, SchemaCompletion>;
+  /** lower-case column name → array of completions (one per owning table). */
+  readonly columns: ReadonlyMap<string, SchemaCompletion[]>;
+  /** "table.col" lower-case → completion item for dot completion. */
+  readonly dot: ReadonlyMap<string, SchemaCompletion>;
+}
+
+const EMPTY_INDEX: CompletionIndex = {
+  tables: new Map(),
+  columns: new Map(),
+  dot: new Map(),
+};
+
+function buildIndex(schema: DatabaseSchema | null): CompletionIndex {
+  if (!schema || schema.tables.length === 0) return EMPTY_INDEX;
+  const tables = new Map<string, SchemaCompletion>();
+  const columns = new Map<string, SchemaCompletion[]>();
+  const dot = new Map<string, SchemaCompletion>();
+  for (const table of schema.tables) {
+    const tlc = table.name.toLowerCase();
+    tables.set(tlc, {
+      label: table.name,
+      type: "table",
+      detail: `${table.columns.length} 列`,
+      apply: table.name,
+    });
+    for (const col of table.columns) {
+      const clc = col.name.toLowerCase();
+      const entry: SchemaCompletion = {
+        label: col.name,
+        type: "column",
+        detail: `${table.name}.${col.data_type || "unknown"}`,
+        apply: col.name,
+      };
+      const bucket = columns.get(clc);
+      if (bucket) bucket.push(entry);
+      else columns.set(clc, [entry]);
+      const dotKey = `${tlc}.${clc}`;
+      dot.set(dotKey, {
+        label: `${table.name}.${col.name}`,
+        type: "column",
+        detail: col.data_type || "unknown",
+        apply: col.name,
+      });
+    }
+  }
+  return { tables, columns, dot };
+}
+
+// Per-schema memoized index. SQLite pointers are stable across renders so we
+// can store in a WeakMap and GC when the schema is replaced.
+const INDEX_CACHE = new WeakMap<DatabaseSchema, CompletionIndex>();
+
+function indexFor(schema: DatabaseSchema | null): CompletionIndex {
+  if (!schema) return EMPTY_INDEX;
+  let cached = INDEX_CACHE.get(schema);
+  if (!cached) {
+    cached = buildIndex(schema);
+    INDEX_CACHE.set(schema, cached);
+  }
+  return cached;
+}
+
+function pushIfStartsWith(
+  map: ReadonlyMap<string, SchemaCompletion>,
+  prefix: string,
+  out: SchemaCompletion[],
+): void {
+  // Linear scan restricted to the map size (rather than the full schema).
+  // For large schemas we could also bucket-by-first-letter; the linear
+  // bound is fine up to ~50k entries.
+  for (const [k, v] of map) {
+    if (k.startsWith(prefix)) out.push(v);
+  }
+}
+
+function pushColumnListIfStartsWith(
+  map: ReadonlyMap<string, SchemaCompletion[]>,
+  prefix: string,
+  out: SchemaCompletion[],
+): void {
+  for (const [k, v] of map) {
+    if (k.startsWith(prefix)) {
+      for (const c of v) out.push(c);
+    }
+  }
+}
+
 export function fillKeywordCompletions(
   prefix: string,
   out: SchemaCompletion[],
@@ -298,63 +432,51 @@ export function fillFunctionCompletions(
 export function fillTableCompletions(
   prefix: string,
   out: SchemaCompletion[],
+  schema: DatabaseSchema | null,
 ): void {
-  if (!cachedSchema) return;
-  for (const table of cachedSchema.tables) {
-    if (table.name.toLowerCase().startsWith(prefix)) {
-      out.push({
-        label: table.name,
-        type: "table",
-        detail: `${table.columns.length} 列`,
-        apply: table.name,
-      });
-    }
-  }
+  if (!schema) return;
+  pushIfStartsWith(indexFor(schema).tables, prefix, out);
 }
 
 export function fillColumnCompletions(
   prefix: string,
   out: SchemaCompletion[],
+  schema: DatabaseSchema | null,
 ): void {
-  if (!cachedSchema) return;
-  for (const table of cachedSchema.tables) {
-    for (const col of table.columns) {
-      if (col.name.toLowerCase().startsWith(prefix)) {
-        out.push({
-          label: col.name,
-          type: "column",
-          detail: `${table.name}.${col.data_type || "unknown"}`,
-          apply: col.name,
-        });
-      }
-    }
-  }
+  if (!schema) return;
+  pushColumnListIfStartsWith(indexFor(schema).columns, prefix, out);
 }
 
-/**
- * Dot notation: "users.na" → returns columns of table 'users' starting
- * with 'na'. Pure — no CodeMirror types.
- */
 export function fillDotCompletions(
   prefix: string,
   out: SchemaCompletion[],
+  schema: DatabaseSchema | null,
 ): void {
-  if (!cachedSchema) return;
+  if (!schema) return;
   const dotIdx = prefix.indexOf(".");
   if (dotIdx < 0) return;
   const tableName = prefix.substring(0, dotIdx).toLowerCase();
   const colPrefix = prefix.substring(dotIdx + 1).toLowerCase();
-  const table = cachedSchema.tables.find(
-    (t) => t.name.toLowerCase() === tableName,
-  );
+  const idx = indexFor(schema);
+  const table = idx.tables.get(tableName);
   if (!table) return;
-  for (const col of table.columns) {
-    if (col.name.toLowerCase().startsWith(colPrefix)) {
+  // Iterate over the table's columns via the dot-key map so we don't
+  // re-scan unrelated tables.
+  for (const [k, v] of idx.dot) {
+    if (k.startsWith(`${tableName}.`) && k.substring(tableName.length + 1).startsWith(colPrefix)) {
+      out.push(v);
+    }
+  }
+}
+
+function fillRedisCompletions(prefix: string, out: SchemaCompletion[]): void {
+  for (const cmd of REDIS_COMMANDS) {
+    if (cmd.toLowerCase().startsWith(prefix)) {
       out.push({
-        label: `${table.name}.${col.name}`,
-        type: "column",
-        detail: col.data_type || "unknown",
-        apply: col.name,
+        label: cmd,
+        type: "command",
+        detail: "Redis 命令",
+        apply: cmd,
       });
     }
   }
@@ -362,23 +484,34 @@ export function fillDotCompletions(
 
 /**
  * Main entry for SQLEditor. Given current text + cursor pos, returns
- * up to `limit` completions biased by context.
+ * up to `limit` completions biased by context and dialect.
  *
- * Behavior: if cursor is at a word boundary (e.g. just typed a space),
- * shows default-context completions (keywords/tables/columns).
- * If cursor is mid-word, shows filtered by prefix.
+ *   - For `dialect === "redis"`: return Redis command completions;
+ *     SQL keywords/functions are suppressed because they make no sense
+ *     in `redis-cli`-shaped input.
+ *   - Otherwise: existing table-column-keyword logic, prefix-indexed
+ *     against the cached schema.
  */
 export function getCompletions(
   text: string,
   pos: number,
+  schema: DatabaseSchema | null,
   limit = 50,
+  dialect: SqlDialect = "postgresql",
 ): SchemaCompletion[] {
+  if (dialect === "redis") {
+    if (text.length === 0 || pos <= 0) return [];
+    const ctx = getCursorContext(text, pos);
+    if (ctx !== "word") return [];
+    const current = getCurrentWord(text, pos);
+    const prefix = current?.word.toLowerCase() ?? "";
+    const out: SchemaCompletion[] = [];
+    fillRedisCompletions(prefix, out);
+    return out.slice(0, limit);
+  }
+
   if (text.length === 0 || pos <= 0) return [];
 
-  // Gating: only show completions when the cursor is mid-word.
-  // After spaces / semicolons / brackets / comments / strings,
-  // the user has paused typing — hide the dropdown instead of
-  // showing a stale list of unrelated candidates.
   const ctx = getCursorContext(text, pos);
   if (ctx !== "word") return [];
 
@@ -387,9 +520,8 @@ export function getCompletions(
 
   const out: SchemaCompletion[] = [];
 
-  // Dot notation: users.na → fill columns of 'users'
   if (current && current.word.includes(".")) {
-    fillDotCompletions(prefix, out);
+    fillDotCompletions(prefix, out, schema);
     return out.slice(0, limit);
   }
 
@@ -398,47 +530,21 @@ export function getCompletions(
 
   switch (context) {
     case "table-context":
-      fillTableCompletions(prefix, out);
-      fillColumnCompletions(prefix, out);
+      fillTableCompletions(prefix, out, schema);
+      fillColumnCompletions(prefix, out, schema);
       break;
     case "column-context":
-      fillColumnCompletions(prefix, out);
-      fillTableCompletions(prefix, out);
+      fillColumnCompletions(prefix, out, schema);
+      fillTableCompletions(prefix, out, schema);
       fillKeywordCompletions(prefix, out);
       fillFunctionCompletions(prefix, out);
       break;
     default:
       fillKeywordCompletions(prefix, out);
       fillFunctionCompletions(prefix, out);
-      fillTableCompletions(prefix, out);
-      fillColumnCompletions(prefix, out);
+      fillTableCompletions(prefix, out, schema);
+      fillColumnCompletions(prefix, out, schema);
   }
 
   return out.slice(0, limit);
-}
-
-/**
- * Legacy CodeMirror completion source. Kept for T-001b/c migration
- * path so existing CM6 callers don't break. Not used by SQLEditor.
- */
-import type { CompletionContext, CompletionResult } from "@codemirror/autocomplete";
-
-export function schemaCompletionSource(
-  context: CompletionContext,
-): CompletionResult | null {
-  const word = context.matchBefore(/[\w.]+/);
-  if (!word || (word.from === word.to && !context.explicit)) {
-    return null;
-  }
-  const before = context.state.doc.sliceString(
-    Math.max(0, context.pos - 80),
-    context.pos,
-  );
-  const completions = getCompletions(before + " ", before.length + 1);
-  if (completions.length === 0) return null;
-  return {
-    from: word.from,
-    options: completions,
-    filter: false,
-  };
 }

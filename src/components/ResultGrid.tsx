@@ -1,22 +1,42 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+} from "react";
 import type { StatementResult } from "../hooks/useQuery";
 import {
   extractTableFromSql,
   getColumnsForTable,
   getPrimaryKeyColumns,
+  type SqlDialect,
 } from "../lib/schema-source";
-import { Tooltip } from "./ui";
+import type { DatabaseSchema } from "../hooks/useSchema";
+import { buildUpdateStatements, type PendingEdit } from "../domain/sql/updateBuilder";
+import { Tooltip, useToast } from "./ui";
 import "../styles/result-grid.css";
 
 interface ResultGridProps {
   readonly result: StatementResult;
+  /** Database schema — used to resolve primary keys / columns for inline
+   *  editing (UPDATE generation). Injected via props rather than read from a
+   *  module global so the component is a pure function of its props. */
+  readonly schema: DatabaseSchema | null;
+  /** SQL dialect — drives identifier quoting and string escaping in the
+   *  generated UPDATE. Defaults to PostgreSQL. */
+  readonly dialect?: SqlDialect;
   /** Called when the user confirms the staged edits. Receives one or more
-   *  UPDATE statements (one per modified row). */
-  readonly onSubmitUpdate?: (sqls: readonly string[]) => void;
+   *  UPDATE statements (one per modified row) and the total number of
+   *  changed cells across them. */
+  readonly onSubmitUpdate?: (sqls: readonly string[], changeCount: number) => void;
 }
 
 const ROW_HEIGHT = 28;
-const VISIBLE_ROWS = 50;
+const OVERSCAN = 10;
+const DEFAULT_VIEWPORT_HEIGHT = 50 * ROW_HEIGHT; // ~50 rows visible
 const TOAST_DURATION_MS = 1400;
 
 interface CellRef {
@@ -24,23 +44,7 @@ interface CellRef {
   readonly col: number;
 }
 
-/** SQL string-literal escaping: doubles single quotes per SQL convention. */
-function quoteSql(value: string | null): string {
-  if (value === null) return "NULL";
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-/** Staged edit: a single cell change. The original value is captured so we
- *  can skip writes that resolve back to the original (treat as no-op). */
-interface PendingEdit {
-  readonly row: number;
-  readonly col: number;
-  readonly columnName: string;
-  readonly originalValue: string | null;
-  readonly newValue: string;
-}
-
-export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
+export const ResultGrid = memo(function ResultGrid({ result, schema, dialect = "postgresql", onSubmitUpdate }: ResultGridProps) {
   const { sql, columns, rows, affected_rows, truncated } = result;
 
   const totalHeight = useMemo(() => rows.length * ROW_HEIGHT, [rows.length]);
@@ -55,8 +59,20 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
   );
   const [editError, setEditError] = useState<string | null>(null);
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const timerRef = useRef<number | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
+  const toast = useToast();
+
+  // Measure the actual viewport height once mounted. Falls back to the
+  // default if the element isn't ready yet.
+  useLayoutEffect(() => {
+    if (scrollRef.current) {
+      setViewportHeight(scrollRef.current.clientHeight);
+    }
+  }, []);
 
   useEffect(
     () => () => {
@@ -71,6 +87,8 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
     setEditing(null);
     setEditValue("");
     setEditError(null);
+    setScrollTop(0);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [sql, rows]);
 
   // Auto-focus the inline editor input when entering edit mode.
@@ -85,44 +103,22 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
   // can't (e.g. ad-hoc query), inline editing is disabled.
   const tableName = useMemo(() => extractTableFromSql(sql), [sql]);
   const pkColumns = useMemo(
-    () => (tableName ? getPrimaryKeyColumns(tableName) : []),
+    () => (tableName ? getPrimaryKeyColumns(tableName, schema) : []),
     [tableName],
   );
   const editable = tableName !== null && pkColumns.length > 0;
 
-  // Compute WHERE-clause value expressions from the row using pk
-  // columns. Returns null if any pk value is missing.
-  const buildWhereClause = useCallback(
-    (rowIdx: number): string | null => {
-      if (!tableName) return null;
-      const row = rows[rowIdx];
-      if (!row) return null;
-      const parts: string[] = [];
-      for (const pk of pkColumns) {
-        const colIdx = columns.indexOf(pk);
-        if (colIdx < 0) return null;
-        const val = row[colIdx];
-        if (val === null || val === undefined) return null;
-        parts.push(`${pk} = ${quoteSql(val)}`);
-      }
-      if (parts.length === 0) return null;
-      return parts.join(" AND ");
-    },
-    [tableName, pkColumns, columns, rows],
-  );
-
   /** Stage an edit; if `newValue` matches the original, the entry is removed. */
   const stageEdit = useCallback(
-    (row: number, col: number, originalValue: string | null, newValue: string) => {
+    (row: number, col: number, originalValue: string | null, newValue: string | null) => {
       const columnName = columns[col];
       if (!columnName) return;
       const key = `${row}:${col}`;
       setPending((prev) => {
         const next = new Map(prev);
-        // No-op if value didn't change.
-        const orig = originalValue ?? "";
-        const next2 = newValue ?? "";
-        if (orig === next2) {
+        // No-op only when the value is genuinely unchanged (NULL === NULL).
+        // Previously NULL was coerced to "" which made NULL<->"" edits no-ops.
+        if (originalValue === newValue) {
           next.delete(key);
         } else {
           next.set(key, { row, col, columnName, originalValue, newValue });
@@ -178,7 +174,11 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
     if (!editing) return;
     const { row, col } = editing;
     const originalValue = rows[row]?.[col] ?? null;
-    stageEdit(row, col, originalValue, editValue);
+    // Empty input is interpreted as NULL (clearing the cell). This lets users
+    // change a value to NULL by deleting all text; a literal empty string is
+    // not reachable this way (rare in practice — see README).
+    const newValue = editValue === "" ? null : editValue;
+    stageEdit(row, col, originalValue, newValue);
     setEditing(null);
     setEditValue("");
     setEditError(null);
@@ -197,74 +197,96 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
     setEditError(null);
   }, []);
 
-  /** Group staged edits by row, generate one UPDATE statement per row. */
-  const buildUpdateStatements = useCallback((): string[] | null => {
-    if (!tableName) return null;
-    if (pending.size === 0) return [];
-    const byRow = new Map<number, PendingEdit[]>();
-    for (const edit of pending.values()) {
-      const list = byRow.get(edit.row) ?? [];
-      list.push(edit);
-      byRow.set(edit.row, list);
-    }
-    const out: string[] = [];
-    for (const [rowIdx, edits] of byRow.entries()) {
-      const where = buildWhereClause(rowIdx);
-      if (!where) return null;
-      const setClause = edits
-        .map((e) => `${e.columnName} = ${quoteSql(e.newValue)}`)
-        .join(", ");
-      out.push(`UPDATE ${tableName} SET ${setClause} WHERE ${where};`);
-    }
-    return out;
-  }, [tableName, pending, buildWhereClause]);
-
   const handleSubmit = useCallback(() => {
-    const statements = buildUpdateStatements();
+    if (!tableName) return;
+    const statements = buildUpdateStatements(
+      pending,
+      rows,
+      columns,
+      tableName,
+      pkColumns,
+      dialect,
+    );
     if (!statements) {
       setEditError("无法构造 UPDATE 语句(缺少主键或表名)");
       return;
     }
     if (statements.length === 0) return;
-    onSubmitUpdate?.(statements);
-    // Don't clear pending here — the parent dialog will call back on confirm/cancel.
-  }, [buildUpdateStatements, onSubmitUpdate]);
+    onSubmitUpdate?.(statements, pending.size);
+    // Don't clear pending here — staged edits auto-reset via the
+    // `useEffect([sql, rows])` above when the result changes after execution.
+  }, [tableName, pending, rows, columns, pkColumns, dialect, onSubmitUpdate]);
 
-  /** Expose imperative control so App can clear pending after a confirmed
-   *  execution (or restore on cancel). Wired via ref below. */
+  // Local toast text rendered in the header; only used for inline edit
+  // hints / errors. Clip confirmations move to the global toast so the
+  // header stays uncluttered.
   useEffect(() => {
-    (ResultGrid as unknown as { __controller?: GridController }).__controller = {
-      clearPending: () => setPending(new Map()),
-      restorePending: () => {
-        // Pending edits stay in state; nothing to do here. Kept for symmetry.
-      },
-    };
-    return () => {
-      delete (ResultGrid as unknown as { __controller?: GridController })
-        .__controller;
-    };
-  }, []);
-
-  const toastText = useMemo(() => {
-    if (editError) return editError;
-    if (editing) {
-      return `编辑 [${columns[editing.col] ?? ""}] — 回车暂存 / Esc 取消`;
+    if (copied) {
+      const columnName = columns[copied.col] ?? "";
+      const value = rows[copied.row]?.[copied.col] ?? "NULL";
+      toast.info(`已复制: [${columnName}]`, value);
     }
-    if (!copied) return null;
-    const columnName = columns[copied.col] ?? "";
-    return `已复制: [${columnName}] ${rows[copied.row]?.[copied.col] ?? "NULL"}`;
-  }, [copied, editError, editing, columns, rows]);
+  }, [copied, columns, rows, toast]);
+
+  useEffect(() => {
+    if (editError) toast.error("编辑失败", editError);
+  }, [editError, toast]);
 
   const allColumns = useMemo(
-    () => (tableName ? getColumnsForTable(tableName) : []),
+    () => (tableName ? getColumnsForTable(tableName, schema) : []),
     [tableName],
   );
   const hintText = editable
     ? "单击复制 · 双击编辑 · 编辑多个后点「提交」"
     : "双击单元格复制内容";
 
+  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  }, []);
+
+  // Compute the visible row range. Overscan keeps the scrollbar smooth
+  // when the user drags quickly — we render a few extra rows above/below
+  // the visible window.
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const endIndex = Math.min(
+    rows.length,
+    Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN,
+  );
+  const visibleRows = useMemo(
+    () => rows.slice(startIndex, endIndex),
+    [rows, startIndex, endIndex],
+  );
+
+  // Render the JSON view when the user has switched renderers.
+  if (rows.length === 0) {
+    return (
+      <div className="result-container">
+        <div className="result-header">
+          <span className="result-count">0 行</span>
+        </div>
+        <div className="result-scroll">
+          <table className="result-grid">
+            <thead>
+              <tr>
+                <th className="row-num" />
+                {columns.map((col, i) => (
+                  <th key={i}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={columns.length + 1} className="result-empty">无数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
+    <div className="result-container">
       <div className="result-header">
         <span className="result-count">
           {rows.length === affected_rows
@@ -304,10 +326,15 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
             </Tooltip>
           </span>
         )}
-        {toastText && <span className="result-toast">{toastText}</span>}
       </div>
-      <div className="result-scroll">
+      <div className="result-scroll" ref={scrollRef} onScroll={onScroll}>
         <table className="result-grid">
+          <colgroup>
+            <col style={{ width: 36 }} />
+            {columns.map((_, i) => (
+              <col key={i} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               <th className="row-num" />
@@ -322,232 +349,81 @@ export function ResultGrid({ result, onSubmitUpdate }: ResultGridProps) {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length + 1} className="result-empty">
-                  无数据
-                </td>
-              </tr>
-            ) : rows.length <= VISIBLE_ROWS ? (
-              rows.map((row, ri) => (
-                <tr key={ri} style={{ height: ROW_HEIGHT }}>
-                  <td className="row-num">{ri + 1}</td>
-                  {row.map((cell, ci) => {
-                    const pendingKey = `${ri}:${ci}`;
-                    const staged = pending.get(pendingKey);
-                    return (
-                      <CellTd
-                        key={ci}
-                        row={ri}
-                        col={ci}
-                        cell={cell}
-                        staged={staged}
-                        editing={editing}
-                        editValue={editValue}
-                        setEditValue={setEditValue}
-                        editInputRef={editInputRef}
-                        stageCurrentEdit={stageCurrentEdit}
-                        cancelEdit={cancelEdit}
-                        copied={copied}
-                        onClick={handleCellClick}
-                        onDoubleClick={handleCellDoubleClick}
-                      />
-                    );
-                  })}
-                </tr>
-              ))
-            ) : (
-              <VirtualizedRows
-                rows={rows}
-                columns={columns}
-                visibleRows={VISIBLE_ROWS}
-                totalHeight={totalHeight}
-                pending={pending}
-                editing={editing}
-                editValue={editValue}
-                setEditValue={setEditValue}
-                editInputRef={editInputRef}
-                copied={copied}
-                stageCurrentEdit={stageCurrentEdit}
-                cancelEdit={cancelEdit}
-                onCellClick={handleCellClick}
-                onCellDoubleClick={handleCellDoubleClick}
-              />
-            )}
+            <tr>
+              <td colSpan={columns.length + 1} style={{ padding: 0, border: "none" }}>
+                <div
+                  className="virtual-scroll-viewport"
+                  style={{ height: Math.min(totalHeight, viewportHeight) }}
+                >
+                  <div className="virtual-scroll-spacer" style={{ height: totalHeight }}>
+                    {visibleRows.map((row, vi) => {
+                      const ri = startIndex + vi;
+                      const isEditingRow = editing?.row === ri;
+                      return (
+                        <div
+                          key={ri}
+                          className="virtual-row"
+                          style={{ top: ri * ROW_HEIGHT, height: ROW_HEIGHT }}
+                        >
+                          <div className="cell row-num-cell">{ri + 1}</div>
+                          {row.map((cell, ci) => {
+                            const pendingKey = `${ri}:${ci}`;
+                            const staged = pending.get(pendingKey);
+                            const isEditingCell = isEditingRow && editing?.col === ci;
+                            const isCopied = copied?.row === ri && copied?.col === ci;
+                            const isStaged = staged !== undefined;
+                            const display = staged ? staged.newValue : cell ?? "NULL";
+                            return (
+                              <div
+                                key={ci}
+                                className={[
+                                  "cell",
+                                  cell === null && !isStaged ? "cell-null" : "",
+                                  isCopied ? "cell-copied" : "",
+                                  isStaged ? "cell-staged" : "",
+                                ].filter(Boolean).join(" ")}
+                                onClick={() => handleCellClick(ri, ci)}
+                                onDoubleClick={() => handleCellDoubleClick(ri, ci)}
+                                title={
+                                  isStaged
+                                    ? `原值: ${staged?.originalValue ?? "NULL"} → 新值: ${staged?.newValue ?? ""}`
+                                    : "单击复制 · 双击编辑"
+                                }
+                              >
+                                {isEditingCell ? (
+                                  <input
+                                    ref={editInputRef}
+                                    className="cell-edit-input"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        stageCurrentEdit();
+                                      } else if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        cancelEdit();
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    spellCheck={false}
+                                  />
+                                ) : (
+                                  display
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
-    </>
+    </div>
   );
-}
-
-/** Imperative controller exposed via module-level singleton. Used by App to
- *  clear staged edits after a confirmed execution. */
-interface GridController {
-  readonly clearPending: () => void;
-  readonly restorePending: () => void;
-}
-
-export function clearResultGridPending(): void {
-  const ctrl = (ResultGrid as unknown as { __controller?: GridController })
-    .__controller;
-  ctrl?.clearPending();
-}
-
-interface CellTdProps {
-  readonly row: number;
-  readonly col: number;
-  readonly cell: string | null;
-  readonly staged: PendingEdit | undefined;
-  readonly editing: CellRef | null;
-  readonly editValue: string;
-  readonly setEditValue: (v: string) => void;
-  readonly editInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  readonly stageCurrentEdit: () => void;
-  readonly cancelEdit: () => void;
-  readonly copied: CellRef | null;
-  readonly onClick: (row: number, col: number) => void;
-  readonly onDoubleClick: (row: number, col: number) => void;
-}
-
-function CellTd({
-  row,
-  col,
-  cell,
-  staged,
-  editing,
-  editValue,
-  setEditValue,
-  editInputRef,
-  stageCurrentEdit,
-  cancelEdit,
-  copied,
-  onClick,
-  onDoubleClick,
-}: CellTdProps) {
-  const isEditing = editing?.row === row && editing?.col === col;
-  if (isEditing) {
-    return (
-      <td className="cell-editing">
-        <input
-          ref={editInputRef}
-          className="cell-edit-input"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              stageCurrentEdit();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              cancelEdit();
-            }
-          }}
-          // Stay in edit mode on blur; the user might click another cell.
-          spellCheck={false}
-        />
-      </td>
-    );
-  }
-  const isCopied = copied?.row === row && copied?.col === col;
-  const display = staged ? staged.newValue : cell ?? "NULL";
-  const isStaged = staged !== undefined;
-  return (
-    <td
-      className={[
-        cell === null && !isStaged ? "cell-null" : "",
-        isCopied ? "cell-copied" : "",
-        isStaged ? "cell-staged" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      onClick={() => onClick(row, col)}
-      onDoubleClick={() => onDoubleClick(row, col)}
-      title={
-        isStaged
-          ? `原值: ${staged?.originalValue ?? "NULL"} → 新值: ${staged?.newValue ?? ""}`
-          : "单击复制 · 双击编辑"
-      }
-    >
-      {display}
-    </td>
-  );
-}
-
-interface VirtualizedRowsProps {
-  readonly rows: readonly (readonly (string | null)[])[];
-  readonly columns: readonly string[];
-  readonly visibleRows: number;
-  readonly totalHeight: number;
-  readonly pending: Map<string, PendingEdit>;
-  readonly editing: CellRef | null;
-  readonly editValue: string;
-  readonly setEditValue: (v: string) => void;
-  readonly editInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  readonly copied: CellRef | null;
-  readonly stageCurrentEdit: () => void;
-  readonly cancelEdit: () => void;
-  readonly onCellClick: (row: number, col: number) => void;
-  readonly onCellDoubleClick: (row: number, col: number) => void;
-}
-
-function VirtualizedRows({
-  rows,
-  columns,
-  visibleRows,
-  totalHeight,
-  pending,
-  editing,
-  editValue,
-  setEditValue,
-  editInputRef,
-  copied,
-  stageCurrentEdit,
-  cancelEdit,
-  onCellClick,
-  onCellDoubleClick,
-}: VirtualizedRowsProps) {
-  return (
-    <tr>
-      <td colSpan={columns.length + 1} style={{ padding: 0 }}>
-        <div
-          className="virtual-scroll-viewport"
-          style={{ height: visibleRows * ROW_HEIGHT, overflowY: "auto" }}
-        >
-          <div style={{ height: totalHeight, position: "relative" }}>
-            <table className="result-grid virtual-table">
-              <tbody>
-                {rows.map((row, ri) => (
-                  <tr key={ri} style={{ height: ROW_HEIGHT }}>
-                    <td className="row-num">{ri + 1}</td>
-                    {row.map((cell, ci) => {
-                      const staged = pending.get(`${ri}:${ci}`);
-                      return (
-                        <CellTd
-                          key={ci}
-                          row={ri}
-                          col={ci}
-                          cell={cell}
-                          staged={staged}
-                          editing={editing}
-                          editValue={editValue}
-                          setEditValue={setEditValue}
-                          editInputRef={editInputRef}
-                          stageCurrentEdit={stageCurrentEdit}
-                          cancelEdit={cancelEdit}
-                          copied={copied}
-                          onClick={onCellClick}
-                          onDoubleClick={onCellDoubleClick}
-                        />
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </td>
-    </tr>
-  );
-}
+});

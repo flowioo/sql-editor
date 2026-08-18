@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ConnectionStatus } from "../hooks/useConnection";
 import type { ScanResult } from "../hooks/useCodebaseScan";
 import { Tooltip } from "./ui";
@@ -28,7 +29,7 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
   connected: "已连接",
 };
 
-export function Toolbar({
+export const Toolbar = memo(function Toolbar({
   connectionStatus,
   connectionName,
   queryLoading,
@@ -124,4 +125,4 @@ export function Toolbar({
       )}
     </div>
   );
-}
+});

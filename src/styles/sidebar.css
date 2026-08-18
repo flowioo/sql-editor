@@ -88,9 +88,10 @@
   font-weight: 600;
 }
 
-.conn-icon.pg { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
-.conn-icon.mysql { background: rgba(251, 146, 60, 0.15); color: var(--orange); }
-.conn-icon.sqlite { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.conn-icon.type-postgresql { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
+.conn-icon.type-mysql { background: rgba(251, 146, 60, 0.15); color: var(--orange); }
+.conn-icon.type-sqlite { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.conn-icon.type-redis { background: rgba(248, 113, 113, 0.15); color: var(--red); }
 
 .conn-info {
   flex: 1;

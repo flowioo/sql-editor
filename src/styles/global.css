@@ -1,28 +1,7 @@
-:root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #242736;
-  --surface3: #2e3144;
-  --border: #2e3144;
-  --border2: #3a3d52;
-  --text: #e1e4ed;
-  --text2: #8b8fa3;
-  --text3: #5c6072;
-  --accent: #7c6aef;
-  --accent2: #5b4cc4;
-  --accent-light: rgba(124, 106, 239, 0.15);
-  --green: #4ade80;
-  --blue: #60a5fa;
-  --orange: #fb923c;
-  --red: #f87171;
-  --yellow: #fbbf24;
-  --vim-green: #4ade80;
-  --vim-bg: #1a2e1a;
-  --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
-  --sans: 'Inter', -apple-system, 'SF Pro Display', 'Segoe UI', sans-serif;
-  --sidebar-w: 260px;
-  --toolbar-h: 44px;
-}
+/* ============================================================================
+ * Design tokens live in `tokens.css` (single source of truth).
+ * This file only carries base resets + global element styling.
+ * ========================================================================== */
 
 * {
   margin: 0;

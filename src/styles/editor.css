@@ -77,13 +77,25 @@
   border: none;
   outline: none;
   padding: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--mono);      /* M3: 复用全局字体栈，避免硬编码 */
   font-size: 14px;
   resize: none;
   caret-color: #7c6aef;          /* 光标保留紫色可见 */
   line-height: 1.7;
   position: relative;
   z-index: 2;
+}
+
+/* C4a: IME composition pre-edit must be visible. While `.composing` is
+ * set, render the textarea in foreground colour so the user can see what
+ * they're typing. The overlay is hidden at the same time so we don't get
+ * a double-image. */
+.sql-textarea.composing {
+  color: #cdd1de;
+}
+.sql-textarea.composing::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: #cdd1de;
 }
 
 .sql-textarea::selection {
@@ -103,7 +115,7 @@
   bottom: 0;
   padding: 12px;
   background: #0f1117;          /* T-001h: textarea 透明后 hl 提供底色 */
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--mono);      /* M3: 与 textarea 对齐字体度量 */
   font-size: 14px;
   line-height: 1.7;
   color: #cdd1de;
@@ -113,6 +125,13 @@
   pointer-events: none;
   user-select: none;            /* T-001h: 防止误选 highlight 层的彩色 span */
   z-index: 1;
+}
+
+/* C4a: while the textarea shows pre-edit text, hide the overlay to avoid
+ * double-image artifacts (the user's input would otherwise appear in BOTH
+ * the transparent textarea text and the freshly-highlighted overlay). */
+.sql-editor-body.has-composing .sql-highlight {
+  visibility: hidden;
 }
 
 .sql-editor-body {

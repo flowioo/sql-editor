@@ -1,18 +1,19 @@
 /* ============================================================================
  * Design Tokens — single source of truth for visual primitives.
  *
- * All CSS variables below are defined in `global.css`; this file documents
- * what each one is for and adds a few semantic aliases that primitives
- * should prefer over the raw palette.
- *
- * Adding a token:
- *   1. Add the raw value in `:root` in global.css
- *   2. Document it here in the matching section
+ * This file is the **only** place CSS custom properties are defined. Every
+ * other CSS file (including global.css) consumes `var(--name)`. Adding a
+ * new token:
+ *   1. Add the raw value in `:root` below
+ *   2. Document it at the matching section
  *   3. If it's a "use this instead of X" alias, prefer it in primitives
  *
  * When to add a new token vs. reuse an existing one:
  *   - New semantic meaning that 3+ components would reach for → add token
  *   - One-off visual need → inline it; revisit if it spreads
+ *
+ * The `[data-theme="light"]` block at the bottom is a placeholder for
+ * future theme switching; not active yet.
  * ========================================================================== */
 
 /* ---- Color palette (raw) ------------------------------------------------- */
@@ -92,4 +93,13 @@
   --motion-fast: 0.1s;
   --motion-base: 0.15s;
   --motion-slow: 0.3s;
+}
+
+/* ============================================================================
+ * Theme overrides — placeholder for future light/dark switching.
+ * Currently inactive; tokens above stay authoritative. When implementing
+ * theme switching, override only the values that change per theme.
+ * ========================================================================== */
+[data-theme="light"] {
+  /* TODO: light theme palette — mirror the :root block above with new values. */
 }

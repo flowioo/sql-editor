@@ -227,6 +227,79 @@
   background: rgba(245, 158, 11, 0.15);
 }
 
+.type-redis {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.15);
+}
+
+/* Search box above the saved list */
+.saved-search {
+  padding: 8px 12px;
+  background: #0f1117;
+  border: 1px solid #2e3144;
+  border-radius: 6px;
+  color: #e1e4ed;
+  font-size: 13px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.saved-search:focus {
+  outline: none;
+  border-color: #7c6aef;
+}
+
+.saved-search::placeholder {
+  color: #3e4156;
+}
+
+/* "+ 新建连接" button pinned under the saved list */
+.btn-new-connection {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 0;
+  background: transparent;
+  border: 1px dashed #3e4156;
+  border-radius: 6px;
+  color: #6cef8c;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-new-connection:hover {
+  border-color: #6cef8c;
+  background: rgba(108, 239, 140, 0.08);
+}
+
+/* Secondary switch (表单 / URL) inside the 新建 pane */
+.new-mode-switch {
+  display: flex;
+  gap: 8px;
+  padding: 14px 20px 0;
+}
+
+.new-mode-switch button {
+  padding: 4px 12px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #5c6072;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.new-mode-switch button:hover {
+  color: #e1e4ed;
+}
+
+.new-mode-switch button.active {
+  color: #7c6aef;
+  border-color: #7c6aef;
+  background: rgba(124, 106, 239, 0.12);
+}
+
 .saved-info {
   flex: 1;
   min-width: 0;

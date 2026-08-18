@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { call } from "../lib/ipc";
 
 export interface ScanResult {
   readonly models_found: number;
@@ -30,7 +30,7 @@ export function useCodebaseScan(): UseCodebaseScanReturn {
     setScanning(true);
     setError(null);
     try {
-      const result = await invoke<ScanResult>("scan_codebase", { dirPath });
+      const result = await call<ScanResult>("scan_codebase", { dirPath });
       setScanResult(result);
     } catch (e) {
       setError(String(e));

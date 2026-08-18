@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "../lib/ipc";
 
 export interface Column {
   readonly name: string;
@@ -45,7 +45,7 @@ export function useSchema(): UseSchemaReturn {
 
   const loadFromCache = useCallback(async () => {
     try {
-      const cached = await invoke<DatabaseSchema | null>("get_cached_schema");
+      const cached = await call<DatabaseSchema | null>("get_cached_schema");
       if (cached) {
         setSchema(cached);
         setLastRefreshedAt(cached.captured_at);
@@ -61,14 +61,14 @@ export function useSchema(): UseSchemaReturn {
     setOffline(false);
     setError(null);
     try {
-      const result = await invoke<DatabaseSchema>("refresh_schema");
+      const result = await call<DatabaseSchema>("refresh_schema");
       setSchema(result);
       setLastRefreshedAt(result.captured_at);
     } catch (e) {
       setError(String(e));
       // Try loading from cache as fallback (offline mode)
       try {
-        const cached = await invoke<DatabaseSchema | null>("get_cached_schema");
+        const cached = await call<DatabaseSchema | null>("get_cached_schema");
         if (cached) {
           setSchema(cached);
           setOffline(true);
@@ -86,14 +86,14 @@ export function useSchema(): UseSchemaReturn {
     setOffline(false);
     setError(null);
     try {
-      const diff = await invoke<DiffResult>("diff_schema");
+      const diff = await call<DiffResult>("diff_schema");
       setSchema(diff.schema);
       setLastRefreshedAt(diff.schema.captured_at);
     } catch (e) {
       setError(String(e));
       // Offline fallback — load from cache only
       try {
-        const cached = await invoke<DatabaseSchema | null>("get_cached_schema");
+        const cached = await call<DatabaseSchema | null>("get_cached_schema");
         if (cached) {
           setSchema(cached);
           setOffline(true);

@@ -1,4 +1,4 @@
-export type ConnectionType = "sqlite" | "postgresql" | "mysql";
+export type ConnectionType = "sqlite" | "postgresql" | "mysql" | "redis";
 
 export interface SqliteConfig {
   readonly type: "sqlite";
@@ -25,4 +25,13 @@ export interface MysqlConfig {
   readonly url?: string;
 }
 
-export type ConnectionConfig = SqliteConfig | PostgresqlConfig | MysqlConfig;
+export interface RedisConfig {
+  readonly type: "redis";
+  readonly host: string;
+  readonly port: number;
+  readonly password: string;
+  /** Logical database index (SELECT n), 0 by default. */
+  readonly database: number;
+}
+
+export type ConnectionConfig = SqliteConfig | PostgresqlConfig | MysqlConfig | RedisConfig;

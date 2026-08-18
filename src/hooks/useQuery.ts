@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useCallback, useRef } from "react";
+import { call } from "../lib/ipc";
 
 export interface StatementResult {
   readonly sql: string;
@@ -16,11 +16,16 @@ export interface MultiQueryResult {
   readonly total_duration_ms: number;
 }
 
+export interface ExecuteOutcome {
+  readonly result: MultiQueryResult | null;
+  readonly error: string | null;
+}
+
 export interface UseQueryReturn {
   readonly result: MultiQueryResult | null;
   readonly loading: boolean;
   readonly error: string | null;
-  readonly execute: (sql: string) => Promise<MultiQueryResult | null>;
+  readonly execute: (sql: string) => Promise<ExecuteOutcome>;
   readonly clear: () => void;
 }
 
@@ -28,22 +33,33 @@ export function useQuery(): UseQueryReturn {
   const [result, setResult] = useState<MultiQueryResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Monotonic request id — bumped for every execute() call. When a response
+  // arrives, we compare its captured id to the current one and drop the
+  // result if a newer request has started in the meantime. Prevents
+  // out-of-order responses from clobbering the latest result.
+  const requestIdRef = useRef(0);
 
-  const execute = useCallback(async (sql: string): Promise<MultiQueryResult | null> => {
-    if (!sql.trim()) return null;
+  const execute = useCallback(async (sql: string): Promise<ExecuteOutcome> => {
+    if (!sql.trim()) return { result: null, error: null };
+    const reqId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
 
     try {
-      const res = await invoke<MultiQueryResult>("execute_query", { sql });
+      const res = await call<MultiQueryResult>("execute_query", { sql });
+      // If a newer request has been issued, drop this result.
+      if (reqId !== requestIdRef.current) return { result: null, error: null };
       setResult(res);
-      return res;
+      setError(null);
+      return { result: res, error: null };
     } catch (e) {
-      setError(String(e));
+      if (reqId !== requestIdRef.current) return { result: null, error: null };
+      const msg = String(e);
+      setError(msg);
       setResult(null);
-      return null;
+      return { result: null, error: msg };
     } finally {
-      setLoading(false);
+      if (reqId === requestIdRef.current) setLoading(false);
     }
   }, []);
 

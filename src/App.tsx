@@ -9,7 +9,7 @@ import { UpdateConfirmDialog } from "./components/UpdateConfirmDialog";
 import { ToastProvider, TooltipProvider, useToast } from "./components/ui";
 import { ConsoleMessages } from "./components/ConsoleMessages";
 import { ConnectionDialog, type SavedConnection } from "./components/ConnectionDialog";
-import { clearResultGridPending } from "./components/ResultGrid";
+import { materializeConfig } from "./lib/credentials";
 import { AIPanel } from "./components/AIPanel";
 import { TableStructure } from "./components/TableStructure";
 import { useTabStore } from "./hooks/useTabStore";
@@ -19,25 +19,12 @@ import { useQuery } from "./hooks/useQuery";
 import { useQueryHistory } from "./hooks/useQueryHistory";
 import { useCodebaseScan } from "./hooks/useCodebaseScan";
 import { useColumnDescriptions } from "./hooks/useColumnDescriptions";
-import { updateSchemaForAutocomplete } from "./editor/extensions";
+import { useSettings } from "./hooks/useSettings";
+import { connIdFromConfig, dialectOfConnection } from "./lib/connection-utils";
 import "./styles/layout.css";
 import "./styles/result-tabs.css";
 import "./styles/history-files.css";
 import "./styles/update-confirm-dialog.css";
-
-/** Stable id used to bucket history / files per connection.
- *  Mirrors the scheme in src-tauri/src/commands/files.rs::sanitize_conn_id
- *  so the localStorage connectionId and the Rust-side subdirectory line up. */
-function connIdFromConfig(c: import("./types/connection").ConnectionConfig): string {
-  switch (c.type) {
-    case "sqlite":
-      return c.path;
-    case "postgresql":
-      return `postgresql://${c.user}@${c.host}:${c.port}/${c.database}`;
-    case "mysql":
-      return `mysql://${c.user}@${c.host}:${c.port}/${c.database}`;
-  }
-}
 
 export default function App() {
   // Wrap the real tree in <ToastProvider> so descendants can use useToast().
@@ -51,17 +38,25 @@ export default function App() {
 }
 
 function AppInner() {
-  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent, renameTab } = useTabStore();
+  const {
+    status: connStatus,
+    displayName,
+    config: currentConfig,
+    connect: doConnect,
+    disconnect: doDisconnect,
+    error: connError,
+  } = useConnection();
+  const { tabs, activeTabId, addTab, removeTab, setActiveTab, updateTabContent, renameTab } = useTabStore(
+    currentConfig ? connIdFromConfig(currentConfig) : null,
+  );
   const toast = useToast();
-  const [vimEnabled, setVimEnabled] = useState(true);
+  const { settings, update: updateSettings } = useSettings();
+  const vimEnabled = settings.vimEnabled;
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
   const [showAI, setShowAI] = useState(false);
   const [structureTable, setStructureTable] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState<string>("NORMAL");
-  // Bumped whenever a connection is added/renamed/deleted; Sidebar re-reads
-  // localStorage on change so the list reflects the latest state.
-  const [savedConnectionsVersion, setSavedConnectionsVersion] = useState(0);
   // Filename of the most recently opened .sql file, if any. Used by Sidebar
   // to highlight the active row in the Files tab.
   const [activeFilename, setActiveFilename] = useState<string | null>(null);
@@ -70,6 +65,9 @@ function AppInner() {
     readonly sqls: readonly string[];
     readonly changeCount: number;
   } | null>(null);
+  // Track which table→SQL was last generated for the redis branch so we
+  // can re-issue it without forcing the tree re-render.
+  const redisTableCursorsRef = useRef<Map<string, string>>(new Map());
 
   // Ref to get current content from editor
   const getContentRef = useRef<(() => string) | null>(null);
@@ -77,15 +75,9 @@ function AppInner() {
   const getSqlToExecuteRef = useRef<(() => string) | null>(null);
 
   const {
-    status: connStatus,
-    displayName,
-    config: currentConfig,
-    connect: doConnect,
-    disconnect: doDisconnect,
-  } = useConnection();
-  const {
     schema,
     loading: schemaLoading,
+    error: schemaError,
     lastRefreshedAt,
     offline,
     loadFromCache,
@@ -109,9 +101,20 @@ function AppInner() {
     saveCurrentAsFile,
   } = useQueryHistory(currentConfig ? connIdFromConfig(currentConfig) : null);
   const { scanning, scanResult, scanCodebase } = useCodebaseScan();
-  const { descriptions, loadDescriptions } = useColumnDescriptions();
+  const { descriptions, states: descStates, loadDescriptions } = useColumnDescriptions();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  // Surface connection failures — useConnection stores the error but nothing
+  // else reads it, so without this a failed connect looks like a dead click.
+  useEffect(() => {
+    if (connError) toast.error("连接失败", connError);
+  }, [connError, toast]);
+
+  // Surface schema refresh failures — same reasoning as connection errors.
+  useEffect(() => {
+    if (schemaError) toast.error("刷新数据库结构失败", schemaError);
+  }, [schemaError, toast]);
 
   // Schema diff on connect
   useEffect(() => {
@@ -121,58 +124,71 @@ function AppInner() {
     }
   }, [connStatus, loadFromCache, diffOnConnect]);
 
-  // Push schema to autocomplete
+  // Load column descriptions for every newly-seen table. Runs in parallel
+  // (Promise.all) so a slow description endpoint doesn't serialise the whole
+  // batch. The per-table state map from useColumnDescriptions also serves as
+  // the cache: tables that already have a successful entry are skipped.
   useEffect(() => {
-    if (schema) {
-      updateSchemaForAutocomplete(schema);
-    }
-  }, [schema]);
-
-  // Load column descriptions
-  useEffect(() => {
-    if (schema) {
-      for (const table of schema.tables) {
-        loadDescriptions(table.name);
-      }
-    }
-  }, [schema, loadDescriptions]);
+    if (!schema) return;
+    const fresh = schema.tables.filter((t) => {
+      const state = descStates.get(t.name);
+      // Only reload when there is no record (loading=false) yet, or when the
+      // last attempt failed (so the user can recover by re-refreshing).
+      return !state || (state.error !== null && !state.loading);
+    });
+    if (fresh.length === 0) return;
+    void Promise.all(fresh.map((t) => loadDescriptions(t.name)));
+  }, [schema, descStates, loadDescriptions]);
 
   const handleRun = useCallback(() => {
-      // Smart execution: prefer selection → current statement → full text
-      const sql = getSqlToExecuteRef.current?.() ?? getContentRef.current?.() ?? "";
-      if (connStatus !== "connected") return;
-      if (!sql.trim()) return;
-      executeQuery(sql).then((queryResult) => {
-        const rowCount = queryResult
-          ? queryResult.results.reduce((sum, r) => sum + (r.is_query ? r.rows.length : 0), 0)
-          : null;
-        addEntry({
-          sql,
-          executedAt: new Date().toISOString(),
-          connectionId: currentConfig ? connIdFromConfig(currentConfig) : null,
-          connectionName: displayName,
-          databaseName: displayName,
-          rowCount,
-          error: queryError,
-        });
+    // Guard against re-run while the previous query is still in flight. The
+    // Toolbar button disables itself in this state; the editor's Cmd+Enter
+    // path goes through this same callback so we don't need a separate check.
+    if (queryLoading) return;
+    // Smart execution: prefer selection → current statement → full text
+    const sql = getSqlToExecuteRef.current?.() ?? getContentRef.current?.() ?? "";
+    if (connStatus !== "connected") return;
+    if (!sql.trim()) return;
+    executeQuery(sql).then(({ result: queryResult, error }) => {
+      const rowCount = queryResult
+        ? queryResult.results.reduce((sum, r) => sum + (r.is_query ? r.rows.length : 0), 0)
+        : null;
+      addEntry({
+        sql,
+        executedAt: new Date().toISOString(),
+        connectionId: currentConfig ? connIdFromConfig(currentConfig) : null,
+        connectionName: displayName,
+        databaseName: displayName,
+        rowCount,
+        error,
       });
-    },
-    [connStatus, executeQuery, addEntry, displayName, queryError, currentConfig],
+    });
+  },
+    [queryLoading, connStatus, executeQuery, addEntry, displayName, currentConfig],
   );
 
   const handleConnectionDialogConnect = useCallback(
     async (config: any) => {
       await doConnect(config);
-      setSavedConnectionsVersion((v) => v + 1);
       setShowConnectionDialog(false);
       setEditingConnection(null);
     },
     [doConnect],
   );
 
+  // Sidebar's saved-connection list sends the whole SavedConnection so the
+  // keychain password can be materialized — the localStorage copy is
+  // passwordless by design and would fail auth if passed straight through.
+  const handleSavedConnectionConnect = useCallback(
+    async (conn: SavedConnection) => {
+      const config = await materializeConfig(conn);
+      await doConnect(config);
+    },
+    [doConnect],
+  );
+
   const handleConnectionDialogClose = useCallback(() => {
     // A new connection may have been added via URL/新建连接 + close.
-    setSavedConnectionsVersion((v) => v + 1);
     setShowConnectionDialog(false);
     setEditingConnection(null);
   }, []);
@@ -200,15 +216,31 @@ function AppInner() {
     [activeTabId, updateTabContent, connStatus, executeQuery],
   );
 
+  // Generate a SCAN query for a Redis pseudo-table. The schema tree represents
+  // each key type as `string (123)`, `hash (45)`, etc. — parse the type
+  // keyword out of the display string and emit a SCAN with TYPE.
+  const buildRedisScan = useCallback((displayName: string, cursor: string): string => {
+    const m = displayName.match(/^([a-zA-Z_]+)\s*\((\d+)\)$/);
+    const type = m ? m[1] : "string";
+    return `SCAN ${cursor} MATCH * COUNT 100 TYPE ${type}`;
+  }, []);
+
   const handleTableSelect = useCallback(
     (tableName: string) => {
+      if (currentConfig?.type === "redis") {
+        const cursor = redisTableCursorsRef.current.get(tableName) ?? "0";
+        const sql = buildRedisScan(tableName, cursor);
+        if (activeTabId) updateTabContent(activeTabId, sql);
+        executeQuery(sql);
+        return;
+      }
       const sql = `SELECT * FROM ${tableName} LIMIT 100;`;
       if (activeTabId) {
         updateTabContent(activeTabId, sql);
       }
       executeQuery(sql);
     },
-    [activeTabId, updateTabContent, executeQuery],
+    [activeTabId, updateTabContent, executeQuery, currentConfig, buildRedisScan],
   );
 
   const handleInsertSQL = useCallback(
@@ -266,10 +298,10 @@ function AppInner() {
   // We don't run them yet — instead open a confirmation dialog so the user
   // can review the SQL before it touches the database.
   const handleStageUpdates = useCallback(
-    (sqls: readonly string[]) => {
+    (sqls: readonly string[], changeCount: number) => {
       if (sqls.length === 0) return;
       if (connStatus !== "connected") return;
-      setPendingUpdates({ sqls, changeCount: sqls.length });
+      setPendingUpdates({ sqls, changeCount });
     },
     [connStatus],
   );
@@ -277,24 +309,26 @@ function AppInner() {
   const handleConfirmUpdates = useCallback(async () => {
     if (!pendingUpdates) return;
     const batch = pendingUpdates.sqls.join("\n");
-    try {
-      await executeQuery(batch);
-      toast.success("更新已执行", `${pendingUpdates.sqls.length} 条语句`);
-    } catch (e) {
-      console.error("Failed to execute UPDATE:", e);
-      toast.error("更新失败", String(e));
-    } finally {
-      setPendingUpdates(null);
-      // Clear staged edits on the grid so the user can re-run the SELECT
-      // to see the post-update state without their pending changes lingering.
-      clearResultGridPending();
+    const { error } = await executeQuery(batch);
+    setPendingUpdates(null);
+    if (error) {
+      console.error("Failed to execute UPDATE:", error);
+      toast.error("更新失败", error);
+      // Keep staged edits on the grid so the user can revise and retry.
+      return;
     }
+    toast.success("更新已执行", `${pendingUpdates.sqls.length} 条语句`);
+    // Staged edits auto-clear: executing the UPDATE batch produces a new query
+    // result, which flows back as a new `result.sql` and resets ResultGrid's
+    // pending state via its `useEffect([sql, rows])`.
   }, [pendingUpdates, executeQuery, toast]);
 
   const handleCancelUpdates = useCallback(() => {
     setPendingUpdates(null);
     // Staged edits intentionally stay on the grid so the user can revise.
   }, []);
+
+  const dialect = dialectOfConnection(currentConfig);
 
   const schemaContext = useMemo(() => {
     if (!schema) return "";
@@ -319,13 +353,12 @@ function AppInner() {
         savedFiles={savedFiles}
         currentConnectionId={displayName}
         activeFilename={activeFilename}
-        savedConnectionsVersion={savedConnectionsVersion}
         onHistorySelect={handleHistorySelect}
         onHistoryRemove={removeEntry}
         onFileOpen={handleFileOpen}
         onFileDelete={handleFileDelete}
         onClearHistory={clearHistory}
-        onConnect={handleConnectionDialogConnect}
+        onConnect={handleSavedConnectionConnect}
         onNewConnection={handleNewConnection}
         onEditConnection={handleEditConnection}
         onTableSelect={handleTableSelect}
@@ -345,7 +378,7 @@ function AppInner() {
           onRefreshSchema={refreshSchema}
           onScanCodebase={scanCodebase}
           onToggleAI={() => setShowAI(!showAI)}
-          onToggleVim={() => setVimEnabled(!vimEnabled)}
+          onToggleVim={() => updateSettings("vimEnabled", !vimEnabled)}
           showAI={showAI}
           vimEnabled={vimEnabled}
           vimMode={vimEnabled ? vimMode : undefined}
@@ -363,6 +396,8 @@ function AppInner() {
             key={activeTab.id}
             content={activeTab.content}
             enableVim={vimEnabled}
+            schema={schema}
+            dialect={dialect}
             getContentRef={getContentRef}
             getSqlToExecuteRef={getSqlToExecuteRef}
             onRun={handleRun}
@@ -383,6 +418,8 @@ function AppInner() {
             <ResultTabs
               results={result.results}
               totalDurationMs={result.total_duration_ms}
+              schema={schema}
+              dialect={dialect === "redis" ? "postgresql" : dialect}
               onSubmitUpdate={handleStageUpdates}
             />
             <ConsoleMessages results={result.results} />

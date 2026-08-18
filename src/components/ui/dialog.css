@@ -97,3 +97,51 @@
 .ui-dialog-content--narrow {
   width: min(420px, 92vw);
 }
+
+/* Confirm dialog action row + buttons. */
+.ui-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 18px 18px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-confirm-default {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9em;
+  transition: background var(--motion-fast), border-color var(--motion-fast);
+}
+
+.btn-confirm-default:hover {
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
+
+.btn-confirm-danger {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--red);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9em;
+  transition: background var(--motion-fast), border-color var(--motion-fast);
+}
+
+.btn-confirm-danger:hover {
+  background: #dc4d4d;
+  border-color: #dc4d4d;
+}

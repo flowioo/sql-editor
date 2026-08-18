@@ -12,3 +12,19 @@ dist/
 .golutra/
 # git worktrees — local development branches
 .worktree/
+# Lockfile — project standardized on pnpm (do not commit npm's lockfile)
+package-lock.json
+# Runtime artifacts
+schema_cache.db
+*.db
+*.sqlite
+*.sqlite3
+# Test & coverage output
+test-results/
+playwright-report/
+coverage/
+# Logs
+*.log
+# IDE
+.idea/
+.vscode/

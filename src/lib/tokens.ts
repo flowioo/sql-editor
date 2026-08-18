@@ -79,3 +79,11 @@ export const DB_TYPE_DEFAULT_PORT: Readonly<Record<string, number>> = {
   mysql: 3306,
   redis: 6379,
 };
+
+/** Short primary-key column header label, used by inline-edit header. */
+export const PK_LABEL: Readonly<Record<string, string>> = {
+  sqlite: "SQLite",
+  postgresql: "PostgreSQL",
+  mysql: "MySQL",
+  redis: "Redis",
+};

@@ -1,102 +1,24 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ConnectionConfig } from "../types/connection";
-import { Dialog, Tooltip } from "./ui";
+import { Dialog } from "./ui";
+import { loadPassword, materializeConfig } from "../lib/credentials";
+import {
+  loadSavedConnections,
+  saveConnection,
+  renameSavedConnection,
+  duplicateSavedConnection,
+  removeSavedConnection,
+  subscribe as subscribeSavedConnections,
+  type SavedConnection,
+} from "../lib/savedConnections";
+import { parseDatabaseUrl, makeDefaultName } from "../lib/connection-url";
+import { useConfirm } from "../hooks/useConfirm";
+import { SavedItem } from "./SavedItem";
 import "../styles/connection-dialog.css";
 
-const STORAGE_KEY = "sql-editor-saved-connections";
-
-export interface SavedConnection {
-  readonly id: string;
-  readonly name: string;
-  readonly config: ConnectionConfig;
-}
-
-export function loadSavedConnections(): SavedConnection[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeSavedConnections(list: SavedConnection[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
-
-export function saveConnection(conn: SavedConnection): void {
-  const list = loadSavedConnections();
-  const idx = list.findIndex((c) => c.id === conn.id);
-  if (idx >= 0) {
-    list[idx] = conn;
-  } else {
-    list.push(conn);
-  }
-  writeSavedConnections(list);
-}
-
-/** Update the displayed name of an existing saved connection by id. */
-export function renameSavedConnection(id: string, name: string): void {
-  const list = loadSavedConnections();
-  const idx = list.findIndex((c) => c.id === id);
-  if (idx < 0) return;
-  list[idx] = { ...list[idx], name: name.trim() || list[idx].name };
-  writeSavedConnections(list);
-}
-
-/** Duplicate a saved connection under a new id and append it. Returns the new entry. */
-export function duplicateSavedConnection(id: string): SavedConnection | null {
-  const list = loadSavedConnections();
-  const src = list.find((c) => c.id === id);
-  if (!src) return null;
-  const newConn: SavedConnection = {
-    id: `${src.id}__copy_${Date.now()}`,
-    name: `${src.name} (副本)`,
-    config: src.config,
-  };
-  list.push(newConn);
-  writeSavedConnections(list);
-  return newConn;
-}
-
-export function removeSavedConnection(id: string): void {
-  const list = loadSavedConnections().filter((c) => c.id !== id);
-  writeSavedConnections(list);
-}
-
-function parseDatabaseUrl(url: string): ConnectionConfig | null {
-  try {
-    const u = new URL(url);
-    const type = u.protocol.replace(":", "") as "postgresql" | "mysql";
-    if (type !== "postgresql" && type !== "mysql") return null;
-    const password = decodeURIComponent(u.password || "");
-    const database = u.pathname.replace(/^\//, "").split("?")[0];
-    if (!u.hostname || !database) return null;
-    return {
-      type,
-      host: u.hostname,
-      port: u.port ? Number(u.port) : type === "postgresql" ? 5432 : 3306,
-      user: decodeURIComponent(u.username || ""),
-      password,
-      database,
-      url,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function makeDefaultName(config: ConnectionConfig): string {
-  switch (config.type) {
-    case "sqlite":
-      return config.path.split("/").pop() || config.path;
-    case "postgresql":
-    case "mysql":
-      return `${config.database} (${config.host})`;
-  }
-}
+export type { SavedConnection } from "../lib/savedConnections";
 
 interface ConnectionDialogProps {
   readonly editTarget?: SavedConnection | null;
@@ -105,14 +27,19 @@ interface ConnectionDialogProps {
 }
 
 export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onConnect }: ConnectionDialogProps) {
-  const [mode, setMode] = useState<"saved" | "url" | "form">("saved");
+  // Top-level tabs: saved-connection list vs. the "create new" pane. The URL
+  // input lives inside the "new" pane as a secondary input mode.
+  const [mode, setMode] = useState<"saved" | "new">("saved");
+  const [inputMode, setInputMode] = useState<"form" | "url">("form");
+  const [search, setSearch] = useState("");
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState("");
   const [alias, setAlias] = useState("");
-  const [activeTab, setActiveTab] = useState<"sqlite" | "postgresql" | "mysql">("postgresql");
+  const [activeTab, setActiveTab] = useState<"sqlite" | "postgresql" | "mysql" | "redis">("postgresql");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections);
+  const { confirm, dialog: confirmDialog } = useConfirm();
   // Driven by App via the prop so the same dialog instance can also be opened
   // from Sidebar's "edit" button. When non-null, form is pre-filled and saving
   // preserves the original id.
@@ -127,7 +54,13 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
   const [password, setPassword] = useState("");
   const [database, setDatabase] = useState("");
 
-  // Pre-fill form whenever editTarget changes.
+  // Re-read the saved list when the underlying store changes (rename /
+  // duplicate / remove from Sidebar or another dialog instance). This
+  // replaces the previous App-level version counter.
+  useEffect(() => subscribeSavedConnections(() => setSavedList(loadSavedConnections())), []);
+
+  // Pre-fill form whenever editTarget changes. The password is loaded
+  // asynchronously from the OS keychain (it is not stored in localStorage).
   useEffect(() => {
     if (!editTarget) return;
     const c = editTarget.config;
@@ -135,23 +68,40 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
     setTestResult(null);
     setUrlInput("");
     setUrlError("");
+    let cancelled = false;
     if (c.type === "sqlite") {
       setActiveTab("sqlite");
       setSqlitePath(c.path);
-    } else if (c.type === "postgresql" || c.type === "mysql") {
+    } else if (c.type === "redis") {
+      setActiveTab("redis");
+      setHost(c.host);
+      setPort(c.port);
+      // `database` state is a string (shared with PG/MySQL db names); the Redis
+      // db index round-trips through String/Number.
+      setDatabase(String(c.database));
+      setPassword("");
+      loadPassword(editTarget.id)
+        .then((pwd) => { if (!cancelled) setPassword(pwd ?? ""); })
+        .catch(() => { /* keychain unavailable — leave blank */ });
+    } else {
       setActiveTab(c.type);
       setHost(c.host);
       setPort(c.port);
       setUser(c.user);
-      setPassword(c.password);
       setDatabase(c.database);
+      setPassword("");
+      loadPassword(editTarget.id)
+        .then((pwd) => { if (!cancelled) setPassword(pwd ?? ""); })
+        .catch(() => { /* keychain unavailable — leave blank */ });
     }
-    setMode("form");
+    setInputMode("form");
+    setMode("new");
+    return () => { cancelled = true; };
   }, [editTarget]);
 
-  const DEFAULT_PORTS: Record<string, number> = { postgresql: 5432, mysql: 3306 };
+  const DEFAULT_PORTS: Record<string, number> = { postgresql: 5432, mysql: 3306, redis: 6379 };
 
-  const handleTabChange = useCallback((tab: "sqlite" | "postgresql" | "mysql") => {
+  const handleTabChange = useCallback((tab: "sqlite" | "postgresql" | "mysql" | "redis") => {
     setActiveTab(tab);
     setTestResult(null);
     if (tab in DEFAULT_PORTS) setPort(DEFAULT_PORTS[tab]);
@@ -165,6 +115,8 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
         return host && user && database ? { type: "postgresql", host, port, user, password, database } : null;
       case "mysql":
         return host && user && database ? { type: "mysql", host, port, user, password, database } : null;
+      case "redis":
+        return host ? { type: "redis", host, port, password, database: Number(database) || 0 } : null;
     }
   }, [activeTab, sqlitePath, host, port, user, password, database]);
 
@@ -183,19 +135,20 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
     }
   }, [buildConfig]);
 
-  const doConnectAndSave = useCallback((config: ConnectionConfig, name?: string, existingId?: string) => {
+  const doConnectAndSave = useCallback(async (config: ConnectionConfig, name?: string, existingId?: string) => {
     const displayName = name || alias || makeDefaultName(config);
-    let id: string;
-    if (existingId) {
-      id = existingId;
-    } else if (config.type === "sqlite") {
-      id = config.path;
-    } else if (config.type === "postgresql") {
-      id = `postgresql://${config.user}@${config.host}:${config.port}/${config.database}`;
-    } else {
-      id = `mysql://${config.user}@${config.host}:${config.port}/${config.database}`;
+    // New connections get a random id so saving two configs for the same
+    // database (e.g. different credentials / aliases) no longer collide.
+    // Editing an existing connection preserves its id.
+    const id = existingId ?? crypto.randomUUID();
+    // saveConnection stores the real password in the OS keychain and a
+    // passwordless copy in localStorage.
+    try {
+      await saveConnection({ id, name: displayName, config });
+    } catch (e) {
+      setTestResult({ ok: false, msg: `保存连接失败（密码无法写入系统密钥链）: ${String(e)}` });
+      return;
     }
-    saveConnection({ id, name: displayName, config });
     setSavedList(loadSavedConnections());
     onConnect(config);
   }, [alias, onConnect]);
@@ -203,7 +156,7 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
   const handleFormConnect = useCallback(() => {
     const config = buildConfig();
     if (!config) return;
-    doConnectAndSave(config, undefined, editTarget?.id);
+    void doConnectAndSave(config, undefined, editTarget?.id);
   }, [buildConfig, doConnectAndSave, editTarget]);
 
   const handleUrlConnect = useCallback(() => {
@@ -213,29 +166,37 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
       return;
     }
     setUrlError("");
-    doConnectAndSave(config, undefined, editTarget?.id);
+    void doConnectAndSave(config, undefined, editTarget?.id);
   }, [urlInput, doConnectAndSave, editTarget]);
 
   const handleCancelEdit = useCallback(() => {
     onClose();
   }, [onClose]);
 
-  const handleSavedConnect = useCallback((conn: SavedConnection) => {
-    onConnect(conn.config);
+  const handleSavedConnect = useCallback(async (conn: SavedConnection) => {
+    const config = await materializeConfig(conn);
+    onConnect(config);
   }, [onConnect]);
 
-  const handleDeleteSaved = useCallback((id: string) => {
-    removeSavedConnection(id);
+  const handleDeleteSaved = useCallback(async (id: string, name: string) => {
+    const ok = await confirm({
+      title: "删除连接",
+      description: `确定要删除连接「${name}」?此操作无法撤销。`,
+      confirmLabel: "删除",
+      variant: "danger",
+    });
+    if (!ok) return;
+    await removeSavedConnection(id);
     setSavedList(loadSavedConnections());
-  }, []);
+  }, [confirm]);
 
   const handleRenameSaved = useCallback((id: string, name: string) => {
     renameSavedConnection(id, name);
     setSavedList(loadSavedConnections());
   }, []);
 
-  const handleDuplicateSaved = useCallback((id: string) => {
-    duplicateSavedConnection(id);
+  const handleDuplicateSaved = useCallback(async (id: string) => {
+    await duplicateSavedConnection(id);
     setSavedList(loadSavedConnections());
   }, []);
 
@@ -253,6 +214,27 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
     setSavedList(loadSavedConnections());
   }, []);
 
+  /** Switch to the 新建 pane — from the tab itself or the "+ 新建连接"
+   *  button at the bottom of the saved list. Clears stale test feedback. */
+  const handleSwitchToNew = useCallback(() => {
+    setMode("new");
+    setTestResult(null);
+    refreshSaved();
+  }, [refreshSaved]);
+
+  const filteredSaved = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return savedList;
+    return savedList.filter((conn) => {
+      const detail = conn.config.type === "sqlite"
+        ? conn.config.path
+        : conn.config.type === "redis"
+          ? `${conn.config.host}:${conn.config.port}/db${conn.config.database}`
+          : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`;
+      return conn.name.toLowerCase().includes(q) || detail.toLowerCase().includes(q);
+    });
+  }, [savedList, search]);
+
   return (
     <Dialog
       open
@@ -263,79 +245,99 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
       panelClassName="connection-dialog-panel"
     >
       <>
-        {/* Mode tabs */}
+        {/* Top-level mode tabs: 连接 / 新建 */}
         <div className="connection-mode-tabs">
           <button className={mode === "saved" ? "active" : ""} onClick={() => { setMode("saved"); refreshSaved(); }}>
-            已保存{savedList.length > 0 ? ` (${savedList.length})` : ""}
+            连接{savedList.length > 0 ? ` (${savedList.length})` : ""}
           </button>
-          <button className={mode === "url" ? "active" : ""} onClick={() => setMode("url")}>URL 连接</button>
-          <button className={mode === "form" ? "active" : ""} onClick={() => setMode("form")}>新建连接</button>
+          <button className={mode === "new" ? "active" : ""} onClick={handleSwitchToNew}>新建</button>
         </div>
 
         {/* Saved connections */}
         {mode === "saved" && (
           <div className="connection-body">
+            {savedList.length > 0 && (
+              <div className="form-group">
+                <input
+                  className="saved-search"
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="搜索连接..."
+                  spellCheck={false}
+                />
+              </div>
+            )}
             {savedList.length === 0 ? (
-              <div className="saved-empty">暂无已保存的连接，请通过 URL 或表单新建。</div>
+              <div className="saved-empty">暂无已保存的连接，点击下方按钮新建。</div>
+            ) : filteredSaved.length === 0 ? (
+              <div className="saved-empty">没有匹配「{search.trim()}」的连接。</div>
             ) : (
               <div className="saved-list">
-                {savedList.map((conn) => (
+                {filteredSaved.map((conn) => (
                   <SavedItem
                     key={conn.id}
                     conn={conn}
                     onConnect={() => handleSavedConnect(conn)}
-                    onDelete={() => handleDeleteSaved(conn.id)}
+                    onDelete={() => handleDeleteSaved(conn.id, conn.name)}
                     onRename={(name) => handleRenameSaved(conn.id, name)}
                     onDuplicate={() => handleDuplicateSaved(conn.id)}
                   />
                 ))}
               </div>
             )}
+            <button className="btn-new-connection" onClick={handleSwitchToNew}>+ 新建连接</button>
           </div>
         )}
 
-        {/* URL mode */}
-        {mode === "url" && (
-          <div className="connection-body">
-            <div className="form-group">
-              <label>数据库连接 URL</label>
-              <input
-                type="text"
-                value={urlInput}
-                onChange={(e) => { setUrlInput(e.target.value); setUrlError(""); }}
-                placeholder="postgresql://user:password@host:5432/database?sslmode=disable"
-                spellCheck={false}
-              />
-            </div>
-            <div className="form-group">
-              <label>别名（可选）</label>
-              <input
-                type="text"
-                value={alias}
-                onChange={(e) => setAlias(e.target.value)}
-                placeholder="例如：生产环境、测试库"
-              />
-            </div>
-            {urlError && <div className="connection-error">{urlError}</div>}
-            <div className="connection-actions">
-              <button className="btn-dialog btn-connect-dialog" onClick={handleUrlConnect} disabled={!urlInput.trim()}>
-                连接并保存
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Form mode */}
-        {mode === "form" && (
+        {/* New-connection pane: URL input or typed form */}
+        {mode === "new" && (
           <>
+            <div className="new-mode-switch">
+              <button className={inputMode === "form" ? "active" : ""} onClick={() => setInputMode("form")}>表单</button>
+              <button className={inputMode === "url" ? "active" : ""} onClick={() => setInputMode("url")}>URL</button>
+            </div>
+
+            {inputMode === "url" && (
+              <div className="connection-body">
+                <div className="form-group">
+                  <label>数据库连接 URL</label>
+                  <input
+                    type="text"
+                    value={urlInput}
+                    onChange={(e) => { setUrlInput(e.target.value); setUrlError(""); }}
+                    placeholder="postgresql://user:password@host:5432/database 或 redis://:password@host:6379/0"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>别名（可选）</label>
+                  <input
+                    type="text"
+                    value={alias}
+                    onChange={(e) => setAlias(e.target.value)}
+                    placeholder="例如：生产环境、测试库"
+                  />
+                </div>
+                {urlError && <div className="connection-error">{urlError}</div>}
+                <div className="connection-actions">
+                  <button className="btn-dialog btn-connect-dialog" onClick={handleUrlConnect} disabled={!urlInput.trim()}>
+                    连接并保存
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {inputMode === "form" && (
+              <>
             <div className="connection-tabs">
-              {(["sqlite", "postgresql", "mysql"] as const).map((tab) => (
+              {(["sqlite", "postgresql", "mysql", "redis"] as const).map((tab) => (
                 <button
                   key={tab}
                   className={`connection-tab${activeTab === tab ? " active" : ""}`}
                   onClick={() => handleTabChange(tab)}
                 >
-                  {tab === "sqlite" ? "SQLite" : tab === "postgresql" ? "PostgreSQL" : "MySQL"}
+                  {tab === "sqlite" ? "SQLite" : tab === "postgresql" ? "PostgreSQL" : tab === "mysql" ? "MySQL" : "Redis"}
                 </button>
               ))}
             </div>
@@ -390,6 +392,31 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
                 </>
               )}
 
+              {activeTab === "redis" && (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>主机</label>
+                      <input type="text" value={host} onChange={(e) => setHost(e.target.value)} placeholder="localhost" />
+                    </div>
+                    <div className="form-group">
+                      <label>端口</label>
+                      <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value))} />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>密码（可选）</label>
+                      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="密码" />
+                    </div>
+                    <div className="form-group">
+                      <label>库编号</label>
+                      <input type="number" value={database} onChange={(e) => setDatabase(e.target.value)} placeholder="0" />
+                    </div>
+                  </div>
+                </>
+              )}
+
               {testResult && (
                 <div className={testResult.ok ? "connection-success" : "connection-error"}>
                   {testResult.msg}
@@ -408,98 +435,12 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
                 {editTarget ? "保存并连接" : "连接并保存"}
               </button>
             </div>
+              </>
+            )}
           </>
         )}
       </>
+      {confirmDialog}
     </Dialog>
-  );
-}
-
-interface SavedItemProps {
-  readonly conn: SavedConnection;
-  readonly onConnect: () => void;
-  readonly onDelete: () => void;
-  readonly onRename: (name: string) => void;
-  readonly onDuplicate: () => void;
-}
-
-function SavedItem({ conn, onConnect, onDelete, onRename, onDuplicate }: SavedItemProps) {
-  const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState(conn.name);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editing]);
-
-  const commit = () => {
-    setEditing(false);
-    if (editValue.trim() && editValue.trim() !== conn.name) {
-      onRename(editValue);
-    }
-  };
-
-  const detail =
-    conn.config.type === "sqlite"
-      ? conn.config.path
-      : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`;
-
-  return (
-    <div
-      className="saved-item"
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest(".saved-actions")) return;
-        onConnect();
-      }}
-    >
-      <span className={`saved-type type-${conn.config.type}`}>
-        {conn.config.type === "sqlite"
-          ? "SQLite"
-          : conn.config.type === "postgresql"
-            ? "PG"
-            : conn.config.type === "mysql"
-              ? "MY"
-              : "RD"}
-      </span>
-      <div className="saved-info">
-        {editing ? (
-          <input
-            ref={inputRef}
-            className="saved-rename-input"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); commit(); }
-              else if (e.key === "Escape") { e.preventDefault(); setEditing(false); setEditValue(conn.name); }
-            }}
-            onBlur={commit}
-            onClick={(e) => e.stopPropagation()}
-            spellCheck={false}
-          />
-        ) : (
-          <span className="saved-name" onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setEditValue(conn.name); }}>
-            {conn.name}
-          </span>
-        )}
-        <span className="saved-detail">{detail}</span>
-      </div>
-      <div className="saved-actions" onClick={(e) => e.stopPropagation()}>
-        <Tooltip content="连接这个数据库">
-          <button className="saved-action" onClick={onConnect}>连接</button>
-        </Tooltip>
-        <Tooltip content="重命名这个连接">
-          <button className="saved-action" onClick={() => setEditing(true)}>重命名</button>
-        </Tooltip>
-        <Tooltip content="复制为新连接">
-          <button className="saved-action" onClick={onDuplicate}>复制</button>
-        </Tooltip>
-        <Tooltip content="删除这个连接">
-          <button className="saved-action danger" onClick={onDelete}>删除</button>
-        </Tooltip>
-      </div>
-    </div>
   );
 }

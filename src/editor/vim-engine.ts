@@ -1,4 +1,12 @@
-// Vim Engine - 极简实现参考 IdeaVim
+// Vim Engine — minimal implementation inspired by IdeaVim.
+//
+// Conventions for MotionResult:
+//   - `start` is the operator-anchor position (typically the cursor's old pos)
+//   - `end`   is the cursor's NEW position after the motion
+//   - For left/inverse motions (h, k) the operator range is [end, start)
+//     and applyOperator normalises via Math.min/max when deleting.
+//   - For forward motions (l, j, w, ...) the range is [start, end).
+// Standalone motion just sets the cursor to `end`.
 
 export type VimMode = "insert" | "normal" | "visual" | "pending";
 
@@ -12,7 +20,9 @@ export interface MotionResult {
   exclusive: boolean; // true = exclusive (inclusive in vim), false = inclusive
 }
 
-// Operator types
+// Operator types — stored VERBATIM in vim state (not the raw key).
+// The caller (useVimKeydown) normalises d/y/c/>/<,/~ → delete/yank/change/indent/outdent/toggleCase
+// before applying.
 export type OperatorType = "delete" | "yank" | "change" | "indent" | "outdent" | "toggleCase";
 
 // Vim state
@@ -20,6 +30,10 @@ export interface VimState {
   mode: VimMode;
   operator: OperatorType | null;
   motion: string | null;
+  /** Pending target char for f/F/t/T motion; null when none. */
+  pendingMotion: string | null;
+  /** First key of a two-key motion (e.g. "g" before "gg"). null when none. */
+  pendingPrefix: string | null;
   count: number;
   register: string;
   visualStart: number | null;
@@ -33,7 +47,9 @@ export function createVimState(): VimState {
     mode: "normal",
     operator: null,
     motion: null,
-    count: 1,
+    pendingMotion: null,
+    pendingPrefix: null,
+    count: 0,
     register: '"',
     visualStart: null,
     visualEnd: null,
@@ -44,17 +60,16 @@ export function createVimState(): VimState {
 
 // Word boundaries
 function isWordChar(ch: string): boolean {
-  return /[\w]/.test(ch);
+  return /[A-Za-z0-9_]/.test(ch);
 }
 
 function isSpaceChar(ch: string): boolean {
   return /\s/.test(ch);
 }
 
-// Find word start
+// Find word start (after the current position's word+spaces)
 function findWordStart(text: string, pos: number): number {
   if (pos >= text.length || isSpaceChar(text[pos])) {
-    // Move to end of current word
     while (pos < text.length && isSpaceChar(text[pos])) pos++;
     return Math.min(pos, text.length);
   }
@@ -64,7 +79,7 @@ function findWordStart(text: string, pos: number): number {
   return Math.min(pos, text.length);
 }
 
-// Find word end
+// Find word end (start of next word-group boundary at or after pos)
 function findWordEnd(text: string, pos: number): number {
   if (pos <= 0) return 0;
   const prevWord = isWordChar(text[pos - 1]);
@@ -73,25 +88,28 @@ function findWordEnd(text: string, pos: number): number {
   return end;
 }
 
-// Find prev word start
+// Find previous word start (vim `b` semantics)
 function findPrevWordStart(text: string, pos: number): number {
   if (pos <= 0) return 0;
-  // Skip current word
   while (pos > 0 && isWordChar(text[pos - 1]) === isWordChar(text[pos])) pos--;
   while (pos > 0 && isSpaceChar(text[pos - 1])) pos--;
-  // Skip prev word
   while (pos > 0 && isWordChar(text[pos - 1])) pos--;
   return Math.max(0, pos);
 }
 
+
 // Motions
-export const motions = {
+export const motions: Record<
+  string,
+  (text: string, pos: number, count: number, char?: string) => MotionResult
+> = {
   // Character motions
-  h: (_text: string, pos: number, count: number): MotionResult => ({
-    start: Math.max(0, pos - count),
-    end: pos,
-    exclusive: true,
-  }),
+  // h is leftward and exclusive; range = [end, start). The min/max sort in
+  // applyOperator turns this into the correct delete range for "dh".
+  h: (_text: string, pos: number, count: number): MotionResult => {
+    const end = Math.max(0, pos - count);
+    return { start: pos, end, exclusive: true };
+  },
 
   l: (text: string, pos: number, count: number): MotionResult => ({
     start: pos,
@@ -103,10 +121,10 @@ export const motions = {
   j: (text: string, pos: number, count: number): MotionResult => {
     const lines = text.slice(0, pos + 1).split("\n");
     const currentLine = lines.length - 1;
-    const col = lines[currentLine].length - 1;
+    const col = lines[currentLine].length; // visual column = end-of-line position (length, not last idx)
     const targetLine = Math.min(lines.length - 1, currentLine + count);
     const targetLines = text.split("\n");
-    const targetCol = Math.min(col, (targetLines[targetLine] || "").length);
+    const targetCol = Math.min(col, (targetLines[targetLine] ?? "").length);
     let targetPos = 0;
     for (let i = 0; i < targetLine; i++) {
       targetPos += targetLines[i].length + 1;
@@ -118,16 +136,16 @@ export const motions = {
   k: (text: string, pos: number, count: number): MotionResult => {
     const lines = text.slice(0, pos + 1).split("\n");
     const currentLine = lines.length - 1;
-    const col = lines[currentLine].length - 1;
+    const col = lines[currentLine].length;
     const targetLine = Math.max(0, currentLine - count);
     const targetLines = text.split("\n");
-    const targetCol = Math.min(col, (targetLines[targetLine] || "").length);
+    const targetCol = Math.min(col, (targetLines[targetLine] ?? "").length);
     let targetPos = 0;
     for (let i = 0; i < targetLine; i++) {
       targetPos += targetLines[i].length + 1;
     }
     targetPos += targetCol;
-    return { start: targetPos, end: pos, exclusive: true };
+    return { start: pos, end: targetPos, exclusive: true };
   },
 
   "0": (_text: string, pos: number): MotionResult => {
@@ -135,10 +153,10 @@ export const motions = {
     return { start: pos, end: lineStart, exclusive: true };
   },
 
-  "$:": (_text: string, pos: number): MotionResult => {
+  "$": (_text: string, pos: number): MotionResult => {
     const lineEnd = _text.indexOf("\n", pos);
     const end = lineEnd === -1 ? _text.length : lineEnd;
-    return { start: pos, end: end, exclusive: true };
+    return { start: pos, end, exclusive: true };
   },
 
   "^": (_text: string, pos: number): MotionResult => {
@@ -184,97 +202,87 @@ export const motions = {
   },
 
   // Document motions
+  // gg → start of file (position 0). Two-key: caller must collect "g"+"g".
   gg: (_text: string, _pos: number): MotionResult => ({ start: _pos, end: 0, exclusive: true }),
-  G: (_text: string, pos: number): MotionResult => ({ start: pos, end: _text.length, exclusive: true }),
+  // G → start of LAST line (not end-of-file).
+  G: (text: string, pos: number): MotionResult => {
+    const lastNl = text.lastIndexOf("\n");
+    const end = lastNl === -1 ? 0 : lastNl + 1;
+    return { start: pos, end, exclusive: true };
+  },
 
-  // Find character
-  "f:": (text: string, pos: number, count: number, char?: string): MotionResult => {
+  // Find character (f/F/t/T) — `char` is provided by the caller after the
+  // keydown loop collects the next printable key.
+  f: (text: string, pos: number, count: number, char?: string): MotionResult => {
     if (!char) return { start: pos, end: pos, exclusive: true };
     let p = pos + 1;
     for (let i = 0; i < count; i++) {
       const found = text.indexOf(char, p);
-      if (found === -1) {
-        p = pos;
-        break;
-      }
+      if (found === -1) { p = pos; break; }
       p = found + 1;
     }
     return { start: pos, end: p, exclusive: true };
   },
 
-  "F:": (text: string, pos: number, count: number, char?: string): MotionResult => {
+  F: (text: string, pos: number, count: number, char?: string): MotionResult => {
     if (!char) return { start: pos, end: pos, exclusive: true };
     let p = pos - 1;
     for (let i = 0; i < count; i++) {
       const found = text.lastIndexOf(char, p);
-      if (found === -1) {
-        p = pos;
-        break;
-      }
+      if (found === -1) { p = pos; break; }
       p = found - 1;
     }
     return { start: pos, end: Math.max(0, p + 1), exclusive: true };
   },
 
-  "t:": (text: string, pos: number, count: number, char?: string): MotionResult => {
-    const result = motions["f:"](text, pos, count, char);
+  t: (text: string, pos: number, count: number, char?: string): MotionResult => {
+    const result = motions.f(text, pos, count, char);
     if (result.end > pos) result.end = Math.max(pos + 1, result.end - 1);
     return result;
   },
 
-  "T:": (text: string, pos: number, count: number, char?: string): MotionResult => {
-    const result = motions["F:"](text, pos, count, char);
+  T: (text: string, pos: number, count: number, char?: string): MotionResult => {
+    const result = motions.F(text, pos, count, char);
     if (result.end < pos) result.end = Math.min(pos - 1, result.end + 1);
     return result;
   },
 };
 
-// Text objects
-export const textObjects = {
+// Text objects — return INCLUSIVE ranges, used by operators the same way as
+// motions (the operator uses min/max so direction is irrelevant).
+export const textObjects: Record<
+  string,
+  (text: string, pos: number) => MotionResult
+> = {
+  // Inner word: contiguous [A-Za-z0-9_] run touching the cursor.
   iw: (text: string, pos: number): MotionResult => {
-    // inner word
-    if (pos >= text.length) return { start: pos, end: pos, exclusive: true };
+    if (pos >= text.length) return { start: pos, end: pos, exclusive: false };
     const startWord = isWordChar(text[pos]);
-    let start = pos,
-      end = pos;
+    let start = pos, end = pos;
     while (start > 0 && isWordChar(text[start - 1]) === startWord) start--;
     while (end < text.length && isWordChar(text[end]) === startWord) end++;
     return { start, end, exclusive: false };
   },
 
   aw: (text: string, pos: number): MotionResult => {
-    const result = textObjects.iw(text, pos);
-    // Include trailing space
-    while (result.end < text.length && /\s/.test(text[result.end]) && text[result.end] !== "\n") {
-      result.end++;
-    }
-    // Include leading space
-    while (result.start > 0 && /\s/.test(text[result.start - 1]) && text[result.start - 1] !== "\n") {
+    const inner = textObjects.iw(text, pos);
+    if (inner.start === inner.end) return inner;
+    const result: MotionResult = { start: inner.start, end: inner.end, exclusive: false };
+    // Include trailing same-line whitespace.
+    while (result.end < text.length && text[result.end] === " ") result.end++;
+    // Include leading whitespace only if there was trailing whitespace
+    // (vim's "aw" = a word + its surrounding single space, on the side
+    // with whitespace).
+    if (result.end > inner.end) {
+      // trailing side already had space, nothing on leading
+    } else if (result.start > 0 && text[result.start - 1] === " ") {
       result.start--;
     }
     return result;
   },
 
-  iW: (text: string, pos: number): MotionResult => {
-    // inner WORD (whitespace separated)
-    if (pos >= text.length) return { start: pos, end: pos, exclusive: true };
-    const startSpace = isSpaceChar(text[pos]);
-    let start = pos,
-      end = pos;
-    while (start > 0 && isSpaceChar(text[start - 1]) === startSpace) start--;
-    while (end < text.length && isSpaceChar(text[end]) === startSpace) end++;
-    return { start, end, exclusive: false };
-  },
-
-  aW: (text: string, pos: number): MotionResult => {
-    const result = textObjects.iW(text, pos);
-    while (result.end < text.length && /\s/.test(text[result.end])) result.end++;
-    while (result.start > 0 && /\s/.test(text[result.start - 1])) result.start--;
-    return result;
-  },
-
+  // Sentence
   is: (_text: string, pos: number): MotionResult => {
-    // inner sentence
     const sentences = _text.split(/(?<=[.!?])\s+/);
     let offset = 0;
     for (const s of sentences) {
@@ -289,16 +297,15 @@ export const textObjects = {
   },
 
   as: (_text: string, pos: number): MotionResult => {
-    const result = textObjects.is(_text, pos);
-    // Include leading whitespace
+    const inner = textObjects.is(_text, pos);
+    const result: MotionResult = { ...inner };
     while (result.start > 0 && /\s/.test(_text[result.start - 1])) result.start--;
-    // Include trailing whitespace
     while (result.end < _text.length && /\s/.test(_text[result.end])) result.end++;
     return result;
   },
 
+  // Paragraph (separated by blank lines)
   ip: (_text: string, pos: number): MotionResult => {
-    // inner paragraph
     const paragraphs = _text.split(/\n\s*\n/);
     let offset = 0;
     for (const p of paragraphs) {
@@ -313,25 +320,21 @@ export const textObjects = {
   },
 
   ap: (_text: string, pos: number): MotionResult => {
-    const result = textObjects.ip(_text, pos);
-    // Include empty line before/after
+    const result = { ...textObjects.ip(_text, pos) };
     while (result.start > 0 && _text[result.start - 1] === "\n") result.start--;
     while (result.end < _text.length && _text[result.end] === "\n") result.end++;
     return result;
   },
 
-  // Brackets
+  // Brackets: inner/around "()"/"[]"/"{}"
   ib: (text: string, pos: number): MotionResult => {
     const open = "([{";
     const close = ")]}";
     let best: MotionResult | null = null;
     let bestDist = Infinity;
-
-    // Find matching bracket
     for (let i = pos; i < text.length; i++) {
       const ci = close.indexOf(text[i]);
       if (ci !== -1) {
-        // Find open
         let depth = 1;
         for (let j = i - 1; j >= 0; j--) {
           if (text[j] === open[ci]) {
@@ -350,38 +353,32 @@ export const textObjects = {
         }
       }
     }
-    return best || { start: pos, end: pos, exclusive: false };
+    return best ?? { start: pos, end: pos, exclusive: false };
   },
 
   ab: (text: string, pos: number): MotionResult => {
-    const result = textObjects.ib(text, pos);
-    if (result.start !== result.end) {
-      result.start--;
-      result.end++;
-    }
+    const inner = textObjects.ib(text, pos);
+    if (inner.start === inner.end) return inner;
+    const result: MotionResult = { start: inner.start - 1, end: inner.end + 1, exclusive: false };
+    if (result.start < 0) result.start = 0;
+    if (result.end > text.length) result.end = text.length;
     return result;
   },
 
-  // Quotes
+  // Quotes — find nearest quote pair around pos
   iq: (text: string, pos: number): MotionResult => {
     const quotes = ['"', "'", "`"];
     for (const q of quotes) {
-      let start = -1,
-        end = -1;
+      let end = -1;
       for (let i = pos; i < text.length; i++) {
-        if (text[i] === q) {
-          end = i;
-          break;
-        }
+        if (text[i] === q) { end = i; break; }
       }
+      let start = -1;
       for (let i = pos - 1; i >= 0; i--) {
-        if (text[i] === q) {
-          start = i;
-          break;
-        }
+        if (text[i] === q) { start = i; break; }
       }
       if (start !== -1 && end !== -1 && pos > start && pos <= end) {
-        return { start: start + 1, end: end, exclusive: false };
+        return { start: start + 1, end, exclusive: false };
       }
     }
     return { start: pos, end: pos, exclusive: false };
@@ -390,19 +387,13 @@ export const textObjects = {
   aq: (text: string, pos: number): MotionResult => {
     const quotes = ['"', "'", "`"];
     for (const q of quotes) {
-      let start = -1,
-        end = -1;
+      let end = -1;
       for (let i = pos; i < text.length; i++) {
-        if (text[i] === q) {
-          end = i + 1;
-          break;
-        }
+        if (text[i] === q) { end = i + 1; break; }
       }
+      let start = -1;
       for (let i = pos - 1; i >= 0; i--) {
-        if (text[i] === q) {
-          start = i;
-          break;
-        }
+        if (text[i] === q) { start = i; break; }
       }
       if (start !== -1 && end !== -1 && pos >= start && pos <= end) {
         return { start, end, exclusive: false };
@@ -412,19 +403,18 @@ export const textObjects = {
   },
 };
 
-// Operators
+// Operators — delete/yank/change are all range-based text mutations.
+// delete and change are equivalent for our purposes (both splice out the range
+// and enter insert mode is handled by the keymap, not the operator itself).
+function spliceRange(text: string, start: number, end: number): string {
+  return text.slice(0, start) + text.slice(end);
+}
+
 export const operators = {
-  delete: (text: string, start: number, end: number): string => {
-    return text.slice(0, start) + text.slice(end);
-  },
+  delete: spliceRange,
+  change: spliceRange,
 
-  yank: (text: string, start: number, end: number): string => {
-    return text.slice(start, end);
-  },
-
-  change: (text: string, start: number, end: number): string => {
-    return text.slice(0, start) + text.slice(end);
-  },
+  yank: (text: string, start: number, end: number): string => text.slice(start, end),
 
   indent: (text: string, start: number, end: number): string => {
     const lines = text.slice(start, end).split("\n");
@@ -448,4 +438,22 @@ export const operators = {
     }).join("");
     return before + toggled + text.slice(end);
   },
-};
+} as const;
+
+/**
+ * Map a raw key (`"d"`, `"y"`, `"c"`, `">"`, `"<"`, `"~"`) to a canonical
+ * OperatorType. Used by useVimKeydown so the value stored in vimState.operator
+ * matches what applyOperator expects — without this, `dw` silently no-ops
+ * because applyOperator's switch never matches `"d"`.
+ */
+export function operatorFromKey(key: string): OperatorType | null {
+  switch (key) {
+    case "d": return "delete";
+    case "y": return "yank";
+    case "c": return "change";
+    case ">": return "indent";
+    case "<": return "outdent";
+    case "~": return "toggleCase";
+    default: return null;
+  }
+}

@@ -1,3 +1,5 @@
+/* ---- Result container -------------------------------------------------------- */
+
 .result-container {
   flex: 1;
   display: flex;
@@ -15,6 +17,7 @@
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  gap: 8px;
 }
 
 .result-count {
@@ -131,6 +134,7 @@
 .result-scroll {
   flex: 1;
   overflow: auto;
+  position: relative;
 }
 
 .result-grid {
@@ -138,11 +142,16 @@
   border-collapse: collapse;
   font-size: 0.8em;
   font-family: var(--mono);
+  table-layout: fixed;
 }
 
-.result-grid th {
+.result-grid thead {
   position: sticky;
   top: 0;
+  z-index: 2;
+}
+
+.result-grid thead th {
   background: var(--surface2);
   color: var(--text2);
   font-weight: 600;
@@ -150,19 +159,66 @@
   padding: 6px 12px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
-  z-index: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.result-grid td {
+.result-grid tbody td {
   padding: 4px 12px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
-  max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
   cursor: copy;
   user-select: none;
+}
+
+/* ---- Virtual scroll -------------------------------------------------------- */
+
+/* Outer scroll area — table sits inside this with a fixed row height;
+   the visible window is rendered absolutely so the total scroll height
+   is preserved by padding the wrapper. */
+.virtual-scroll-viewport {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-scroll-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  white-space: nowrap;
+}
+
+.virtual-row > .cell {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: copy;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.virtual-row > .cell.row-num-cell {
+  flex: 0 0 36px;
+  min-width: 36px;
+  text-align: right;
+  color: var(--text3);
+  font-size: 0.9em;
+  background: var(--surface);
+  cursor: default;
+}
+
+.virtual-row:hover .cell {
+  background: rgba(124, 106, 239, 0.04);
 }
 
 .result-grid tr:hover td {

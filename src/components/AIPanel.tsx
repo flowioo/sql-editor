@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSettings } from "../hooks/useSettings";
 import "../styles/ai-panel.css";
 
 interface AIPanelProps {
@@ -12,9 +13,8 @@ interface Message {
   readonly content: string;
 }
 
-const CCR_URL = "http://localhost:8000/v1/chat/completions";
-
 export function AIPanel({ schemaContext, connectionName, onInsertSQL }: AIPanelProps) {
+  const { settings } = useSettings();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,7 @@ ${schemaContext ?? "未获取到数据库结构"}
 
 请用中文回答。如果用户要求写 SQL，直接给出可执行的 SQL 语句，用 \`\`\`sql 代码块包裹。`;
 
-      const resp = await fetch(CCR_URL, {
+      const resp = await fetch(settings.aiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -63,7 +63,7 @@ ${schemaContext ?? "未获取到数据库结构"}
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, schemaContext, connectionName]);
+  }, [input, loading, messages, schemaContext, connectionName, settings.aiEndpoint]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

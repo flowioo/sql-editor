@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { call } from "../lib/ipc";
 import type { ConnectionConfig } from "../types/connection";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected";
@@ -29,21 +29,19 @@ export function useConnection(): UseConnectionReturn {
   const connect = useCallback(async (config: ConnectionConfig) => {
     setState((prev) => ({ ...prev, status: "connecting", error: null }));
     try {
-      const displayName = await invoke<string>("connect", { config });
+      const displayName = await call<string>("connect", { config });
       setState({ config, displayName, status: "connected", error: null });
     } catch (e) {
-      setState({
-        config: null,
-        displayName: null,
-        status: "disconnected",
-        error: String(e),
-      });
+      // The Rust `connect` command is fail-closed: on failure it clears the
+      // previous driver, so a subsequent query cannot silently run against
+      // the old connection. Mirror that here — report disconnected.
+      setState({ config: null, displayName: null, status: "disconnected", error: String(e) });
     }
   }, []);
 
   const disconnectFn = useCallback(async () => {
     try {
-      await invoke("disconnect");
+      await call("disconnect");
     } catch {
       // ignore
     }

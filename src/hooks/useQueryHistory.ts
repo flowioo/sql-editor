@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "../lib/ipc";
 
 export interface QueryHistoryEntry {
   readonly id: string;
@@ -96,7 +96,7 @@ async function saveSQLFile(
       .replace(/_+/g, "_")
       .replace(/^_|_$/g, "");
     const filename = `${ts}_${slug}.sql`;
-    const path = await invoke<string>("save_query_file", {
+    const path = await call<string>("save_query_file", {
       connectionId: connectionId ?? "",
       filename,
       content: sql,
@@ -127,7 +127,7 @@ export function useQueryHistory(
 
   const refreshFiles = useCallback(() => {
     const id = currentConnectionId ?? "";
-    invoke<QueryFileInfo[]>("list_query_files", { connectionId: id })
+    call<QueryFileInfo[]>("list_query_files", { connectionId: id })
       .then(setSavedFiles)
       .catch(() => {});
   }, [currentConnectionId]);
@@ -184,7 +184,7 @@ export function useQueryHistory(
 
   const loadFileContent = useCallback(
     async (filename: string): Promise<string> => {
-      return invoke<string>("read_query_file", {
+      return call<string>("read_query_file", {
         connectionId: currentConnectionId ?? "",
         filename,
       });
@@ -194,7 +194,7 @@ export function useQueryHistory(
 
   const deleteFile = useCallback(
     async (filename: string): Promise<void> => {
-      await invoke("delete_query_file", {
+      await call("delete_query_file", {
         connectionId: currentConnectionId ?? "",
         filename,
       });

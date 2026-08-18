@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { DatabaseSchema } from "../hooks/useSchema";
+import { Tooltip } from "./ui";
 import "../styles/schema-tree.css";
 
 interface SchemaTreeProps {
@@ -38,7 +39,9 @@ export function SchemaTree({ schema, descriptions, onTableSelect, onTableStructu
           spellCheck={false}
         />
         {filter && (
-          <button className="schema-filter-clear" onClick={() => setFilter("")}>x</button>
+          <Tooltip content="清空过滤">
+            <button className="schema-filter-clear" onClick={() => setFilter("")}>x</button>
+          </Tooltip>
         )}
       </div>
 
@@ -82,33 +85,35 @@ function TableNode({ table, descriptions, onTableSelect, onTableStructure }: Tab
 
   return (
     <div className="schema-table">
-      <button
-        className="schema-table-header"
-        onClick={() => setExpanded((prev) => !prev)}
-        onDoubleClick={() => onTableSelect?.(table.name)}
-        title="单击展开/收起，双击查询 SELECT * FROM"
-      >
-        <span className={`schema-arrow ${expanded ? "expanded" : ""}`}>
-          ▸
-        </span>
-        <span className="schema-table-icon">⊞</span>
-        <span className="schema-table-name">{table.name}</span>
-        <span className="schema-column-count">
-          {table.columns.length}
-        </span>
-        {onTableStructure && (
+      <Tooltip content="单击展开/收起，双击查询 SELECT * FROM">
+        <button
+          className="schema-table-header"
+          onClick={() => setExpanded((prev) => !prev)}
+          onDoubleClick={() => onTableSelect?.(table.name)}
+        >
+          <span className={`schema-arrow ${expanded ? "expanded" : ""}`}>
+            ▸
+          </span>
+          <span className="schema-table-icon">⊞</span>
+          <span className="schema-table-name">{table.name}</span>
+          <span className="schema-column-count">
+            {table.columns.length}
+          </span>
+        </button>
+      </Tooltip>
+      {onTableStructure && (
+        <Tooltip content="查看表结构">
           <span
             className="schema-table-structure-btn"
             onClick={(e) => {
               e.stopPropagation();
               onTableStructure(table.name);
             }}
-            title="查看表结构"
           >
             ℹ
           </span>
-        )}
-      </button>
+        </Tooltip>
+      )}
       {expanded && (
         <div className="schema-columns">
           {table.columns.map((col) => {
@@ -122,9 +127,11 @@ function TableNode({ table, descriptions, onTableSelect, onTableStructure }: Tab
                 </span>
                 <span className="schema-column-name">{col.name}</span>
                 {desc && (
-                  <span className="schema-column-desc" title={desc}>
-                    {desc}
-                  </span>
+                  <Tooltip content={desc}>
+                    <span className="schema-column-desc">
+                      {desc}
+                    </span>
+                  </Tooltip>
                 )}
                 {col.nullable && (
                   <span className="schema-nullable">NULL</span>

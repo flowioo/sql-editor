@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import type { DatabaseSchema } from "../hooks/useSchema";
 import type { QueryHistoryEntry, QueryFileInfo } from "../hooks/useQueryHistory";
 import {
   loadSavedConnections,
   removeSavedConnection,
+  subscribe as subscribeSavedConnections,
   type SavedConnection,
-} from "./ConnectionDialog";
+} from "../lib/savedConnections";
+import { DB_TYPE_ICON_LABEL } from "../lib/tokens";
 import { SchemaTree } from "./SchemaTree";
 import { Tooltip } from "./ui";
+import { useConfirm } from "../hooks/useConfirm";
 import "../styles/sidebar.css";
 
 type SidebarTabKey = "connections" | "schema" | "history" | "files";
@@ -21,13 +24,12 @@ interface SidebarProps {
   readonly savedFiles: readonly QueryFileInfo[];
   readonly currentConnectionId: string | null;
   readonly activeFilename: string | null;
-  readonly savedConnectionsVersion: number;
   readonly onHistorySelect: (sql: string) => void;
   readonly onHistoryRemove: (id: string) => void;
   readonly onFileOpen: (filename: string) => void;
   readonly onFileDelete: (filename: string) => void;
   readonly onClearHistory: () => void;
-  readonly onConnect: (config: import("../types/connection").ConnectionConfig) => void;
+  readonly onConnect: (conn: SavedConnection) => void;
   readonly onNewConnection: () => void;
   readonly onEditConnection: (conn: SavedConnection) => void;
   readonly onTableSelect?: (tableName: string) => void;
@@ -41,7 +43,11 @@ const TAB_LABELS: Record<SidebarTabKey, string> = {
   files: "文件",
 };
 
-export function Sidebar({
+/** Sidebar renders inline lists for connections / schema / history / files.
+ *  Wrapped in React.memo so the heavy schema tree doesn't re-render when
+ *  the parent (App) re-renders for unrelated reasons (e.g. a query result
+ *  arrived). */
+export const Sidebar = memo(function Sidebar({
   schema,
   lastRefreshedAt,
   offline,
@@ -50,7 +56,6 @@ export function Sidebar({
   savedFiles,
   currentConnectionId,
   activeFilename,
-  savedConnectionsVersion,
   onHistorySelect,
   onHistoryRemove,
   onFileOpen,
@@ -66,12 +71,11 @@ export function Sidebar({
   const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections);
   const [historyFilter, setHistoryFilter] = useState("");
   const [filesFilter, setFilesFilter] = useState("");
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
-  useEffect(() => {
-    setSavedList(loadSavedConnections());
-  }, [savedConnectionsVersion]);
-
-  const refreshSaved = () => setSavedList(loadSavedConnections());
+  // Subscribe to the saved-connection store so renames / deletes / duplicates
+  // (from ConnectionDialog or another Sidebar) refresh this list automatically.
+  useEffect(() => subscribeSavedConnections(() => setSavedList(loadSavedConnections())), []);
 
   // Reset filters when switching tabs.
   useEffect(() => {
@@ -130,25 +134,23 @@ export function Sidebar({
                     className={`conn-item${isActive ? " active" : ""}`}
                   >
                     <span className={`conn-icon type-${conn.config.type}`}>
-                      {conn.config.type === "sqlite"
-                        ? "SQLite"
-                        : conn.config.type === "postgresql"
-                          ? "PG"
-                          : "MY"}
+                      {DB_TYPE_ICON_LABEL[conn.config.type] ?? "?"}
                     </span>
                     <div className="conn-info">
                       <span className="conn-name">{conn.name}</span>
                       <span className="conn-detail">
                         {conn.config.type === "sqlite"
                           ? conn.config.path
-                          : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`}
+                          : conn.config.type === "redis"
+                            ? `${conn.config.host}:${conn.config.port}/db${conn.config.database}`
+                            : `${conn.config.user}@${conn.config.host}:${conn.config.port}/${conn.config.database}`}
                       </span>
                     </div>
                     <div className="conn-actions">
                       <Tooltip content="连接">
                         <button
                           className="conn-action"
-                          onClick={() => onConnect(conn.config)}
+                          onClick={() => onConnect(conn)}
                         >
                           连接
                         </button>
@@ -164,11 +166,14 @@ export function Sidebar({
                       <Tooltip content="删除">
                         <button
                           className="conn-action danger"
-                          onClick={() => {
-                            if (confirm(`确定要删除连接「${conn.name}」?`)) {
-                              removeSavedConnection(conn.id);
-                              refreshSaved();
-                            }
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: "删除连接",
+                              description: `确定要删除连接「${conn.name}」?`,
+                              confirmLabel: "删除",
+                              variant: "danger",
+                            });
+                            if (ok) await removeSavedConnection(conn.id);
                           }}
                         >
                           删除
@@ -215,11 +220,15 @@ export function Sidebar({
               </span>
               <button
                 className="history-clear"
-                onClick={() => {
+                onClick={async () => {
                   if (history.length === 0) return;
-                  if (confirm(`清空全部 ${history.length} 条历史记录?`)) {
-                    onClearHistory();
-                  }
+                  const ok = await confirm({
+                    title: "清空历史",
+                    description: `清空全部 ${history.length} 条历史记录?`,
+                    confirmLabel: "清空",
+                    variant: "danger",
+                  });
+                  if (ok) onClearHistory();
                 }}
                 disabled={history.length === 0}
               >
@@ -236,7 +245,15 @@ export function Sidebar({
                   key={entry.id}
                   entry={entry}
                   onClick={() => onHistorySelect(entry.sql)}
-                  onRemove={() => onHistoryRemove(entry.id)}
+                  onRemove={async () => {
+                    const ok = await confirm({
+                      title: "删除历史记录",
+                      description: "删除这条历史记录?",
+                      confirmLabel: "删除",
+                      variant: "danger",
+                    });
+                    if (ok) onHistoryRemove(entry.id);
+                  }}
                 />
               ))
             )}
@@ -281,10 +298,14 @@ export function Sidebar({
                   file={file}
                   isActive={file.filename === activeFilename}
                   onClick={() => onFileOpen(file.filename)}
-                  onDelete={() => {
-                    if (confirm(`删除文件「${file.filename}」?`)) {
-                      onFileDelete(file.filename);
-                    }
+                  onDelete={async () => {
+                    const ok = await confirm({
+                      title: "删除文件",
+                      description: `删除文件「${file.filename}」?`,
+                      confirmLabel: "删除",
+                      variant: "danger",
+                    });
+                    if (ok) onFileDelete(file.filename);
                   }}
                 />
               ))
@@ -292,9 +313,10 @@ export function Sidebar({
           </div>
         )}
       </div>
+      {confirmDialog}
     </aside>
   );
-}
+});
 
 function HistoryItem({
   entry,
@@ -340,7 +362,7 @@ function HistoryItem({
           className="history-item-remove"
           onClick={(e) => {
             e.stopPropagation();
-            if (confirm("删除这条历史记录?")) onRemove();
+            onRemove();
           }}
           aria-label="删除"
         >

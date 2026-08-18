@@ -9,3 +9,4 @@ export { ToastProvider, useToast } from "./Toast";
 export { Tooltip, TooltipProvider } from "./Tooltip";
 export { DropdownMenu } from "./DropdownMenu";
 export { Popover } from "./Popover";
+export { ConfirmDialog } from "./ConfirmDialog";

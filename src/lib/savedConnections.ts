@@ -49,8 +49,22 @@ export function loadSavedConnections(): SavedConnection[] {
     // Migration: URLs persisted by older builds embedded the plaintext
     // password; strip them in place. `password` is deliberately left
     // untouched here — materializeConfig's legacy fallback may rely on it.
-    const migrated = list.map((c) => ({ ...c, config: withStrippedUrl(c.config) }));
-    if (migrated.some((c, i) => c !== list[i])) writeSavedConnections(migrated);
+    //
+    // Only clone entries whose config actually changed: withStrippedUrl
+    // returns the same reference when there is nothing to strip, so
+    // reference equality doubles as the change signal. Cloning
+    // unconditionally made the write-notify-listen-load cycle recurse
+    // forever (each load "detected" a change and re-notified), freezing
+    // the page with no console output — the errors were swallowed by this
+    // very catch block.
+    let changed = false;
+    const migrated = list.map((c) => {
+      const config = withStrippedUrl(c.config);
+      if (config === c.config) return c;
+      changed = true;
+      return { ...c, config };
+    });
+    if (changed) writeSavedConnections(migrated);
     return migrated;
   } catch {
     return [];

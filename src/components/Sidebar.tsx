@@ -4,6 +4,7 @@ import type { QueryHistoryEntry, QueryFileInfo } from "../hooks/useQueryHistory"
 import {
   loadSavedConnections,
   removeSavedConnection,
+  duplicateSavedConnection,
   subscribe as subscribeSavedConnections,
   type SavedConnection,
 } from "../lib/savedConnections";
@@ -161,6 +162,19 @@ export const Sidebar = memo(function Sidebar({
                           onClick={() => onEditConnection(conn)}
                         >
                           编辑
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="复制为新连接">
+                        <button
+                          className="conn-action"
+                          onClick={async () => {
+                            // duplicateSavedConnection copies the keychain
+                            // password under a new id; the subscribe listener
+                            // above refreshes the list automatically.
+                            await duplicateSavedConnection(conn.id);
+                          }}
+                        >
+                          复制
                         </button>
                       </Tooltip>
                       <Tooltip content="删除">

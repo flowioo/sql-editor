@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ConnectionConfig } from "../types/connection";
-import { Dialog } from "./ui";
+import { Dialog, useToast } from "./ui";
 import { loadPassword, materializeConfig } from "../lib/credentials";
 import {
   loadSavedConnections,
@@ -40,6 +40,7 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections);
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const toast = useToast();
   // Driven by App via the prop so the same dialog instance can also be opened
   // from Sidebar's "edit" button. When non-null, form is pre-filled and saving
   // preserves the original id.
@@ -107,6 +108,20 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
     if (tab in DEFAULT_PORTS) setPort(DEFAULT_PORTS[tab]);
   }, []);
 
+  /** Missing required fields per connection type, for inline validation.
+   *  Mirrors buildConfig's requirements — keep both in sync. */
+  const missingFields = useCallback((): readonly string[] => {
+    switch (activeTab) {
+      case "sqlite":
+        return sqlitePath ? [] : ["数据库文件路径"];
+      case "postgresql":
+      case "mysql":
+        return [host ? null : "主机", user ? null : "用户名", database ? null : "数据库名"].filter((v): v is string => !!v);
+      case "redis":
+        return host ? [] : ["主机"];
+    }
+  }, [activeTab, sqlitePath, host, user, database]);
+
   const buildConfig = useCallback((): ConnectionConfig | null => {
     switch (activeTab) {
       case "sqlite":
@@ -146,18 +161,27 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
     try {
       await saveConnection({ id, name: displayName, config });
     } catch (e) {
-      setTestResult({ ok: false, msg: `保存连接失败（密码无法写入系统密钥链）: ${String(e)}` });
+      // Surface via toast: the previous setTestResult call put the error in
+      // the area next to the "test connection" button which most users never
+      // look at after the test passed, so the dialog appeared to do nothing.
+      toast.error("保存连接失败（密码无法写入系统密钥链）", String(e));
       return;
     }
     setSavedList(loadSavedConnections());
     onConnect(config);
-  }, [alias, onConnect]);
+  }, [alias, onConnect, toast]);
 
   const handleFormConnect = useCallback(() => {
     const config = buildConfig();
-    if (!config) return;
+    if (!config) {
+      // Tell the user WHICH fields are missing instead of the button being
+      // silently disabled (or worse, doing nothing on click).
+      setTestResult({ ok: false, msg: `请填写必填项：${missingFields().join("、")}` });
+      return;
+    }
+    setTestResult(null);
     void doConnectAndSave(config, undefined, editTarget?.id);
-  }, [buildConfig, doConnectAndSave, editTarget]);
+  }, [buildConfig, doConnectAndSave, editTarget, missingFields]);
 
   const handleUrlConnect = useCallback(() => {
     const config = parseDatabaseUrl(urlInput.trim());
@@ -431,7 +455,7 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
               <button className="btn-dialog btn-test" onClick={handleTest} disabled={testing}>
                 {testing ? "测试中..." : "测试连接"}
               </button>
-              <button className="btn-dialog btn-connect-dialog" onClick={handleFormConnect} disabled={!buildConfig()}>
+              <button className="btn-dialog btn-connect-dialog" onClick={handleFormConnect}>
                 {editTarget ? "保存并连接" : "连接并保存"}
               </button>
             </div>

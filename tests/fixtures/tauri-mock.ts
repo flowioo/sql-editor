@@ -101,6 +101,9 @@ export async function installTauriMock(
         // Hook expects ColumnDescription[] — returning `{}` makes
         // `for (const d of result)` throw "result is not iterable".
         get_column_descriptions: () => [],
+        // ConnectionDialog's 测试连接 button — resolves OK like a healthy
+        // local database would.
+        test_connection_cmd: () => null,
       };
 
       let callbackId = 0;

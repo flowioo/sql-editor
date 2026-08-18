@@ -21,6 +21,22 @@ export interface Settings {
   readonly vimEnabled: boolean;
   /** AI Panel endpoint URL. Defaults to the local NL→SQL proxy. */
   readonly aiEndpoint: string;
+  /**
+   * Whether the connected database's schema is attached to AI requests.
+   *
+   * Opt-in by design: schema is business-sensitive metadata (table and column
+   * names leak your data model), and the endpoint above is user-editable, so
+   * defaulting this on would mean a single settings edit silently starts
+   * exfiltrating the schema. The user turns it on when they want better
+   * SQL suggestions and accepts the trade-off.
+   */
+  readonly aiSendSchema: boolean;
+  /**
+   * The non-loopback endpoint the user has explicitly approved for outbound
+   * requests. Cleared whenever `aiEndpoint` changes, so switching to a new
+   * remote host re-prompts instead of inheriting the old approval.
+   */
+  readonly aiApprovedEndpoint: string | null;
   /** Active result renderer. "table" shows the virtualised grid; "json"
    *  shows a syntax-highlighted JSON view (useful for non-tabular output
    *  or quick inspection). */
@@ -30,6 +46,8 @@ export interface Settings {
 const DEFAULT_SETTINGS: Settings = {
   vimEnabled: true,
   aiEndpoint: "http://localhost:8000/v1/chat/completions",
+  aiSendSchema: false,
+  aiApprovedEndpoint: null,
   resultView: "table",
 };
 
@@ -52,7 +70,14 @@ export function useSettings() {
   /** Update a single setting field and persist the new state. */
   const update = useCallback(<K extends keyof Settings>(key: K, value: Settings[K]) => {
     setSettings((prev) => {
-      const next: Settings = { ...prev, [key]: value };
+      const patched: Settings = { ...prev, [key]: value };
+      // Changing the endpoint invalidates any prior outbound-data approval:
+      // consent was given for a specific host, not for "whatever is
+      // configured next".
+      const next: Settings =
+        key === "aiEndpoint" && value !== prev.aiEndpoint
+          ? { ...patched, aiApprovedEndpoint: null }
+          : patched;
       try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
       } catch {

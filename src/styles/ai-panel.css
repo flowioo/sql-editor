@@ -35,6 +35,55 @@
   padding: 10px;
 }
 
+/* Outbound-data controls: keeps the schema opt-in and the endpoint's trust
+   level visible at all times, so "where is my schema going" never requires
+   opening settings. */
+.ai-privacy-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid #2e3144;
+  background: #14152699;
+}
+
+.ai-privacy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #9a9db8;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ai-privacy-toggle input {
+  accent-color: #6c7bff;
+  cursor: pointer;
+  margin: 0;
+}
+
+.ai-endpoint-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.ai-endpoint-badge.local {
+  color: #6fd39a;
+  border-color: #2c5c42;
+  background: #1a3328;
+}
+
+.ai-endpoint-badge.remote {
+  color: #f0b866;
+  border-color: #6b5124;
+  background: #33280f;
+}
+
 .ai-empty {
   text-align: center;
   color: #6b6e87;

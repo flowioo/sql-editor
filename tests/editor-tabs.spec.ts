@@ -42,7 +42,7 @@ test("new query tab is created and stays editable", async ({ page }) => {
   await page.keyboard.press("i");
   await expect(page.locator(".vim-mode")).toContainText(/insert/i);
 
-  await page.keyboard.type("SELECT 1");
+  await page.keyboard.insertText("SELECT 1");
   await expect(editor).toHaveValue(/SELECT 1/);
 });
 
@@ -55,12 +55,16 @@ test("switching tabs preserves each tab's content", async ({ page }) => {
 
   await editor.click();
   await page.keyboard.press("i");
-  await page.keyboard.type("SELECT 'first tab';");
+  // Wait for the mode flip before typing: chars sent while still in normal
+  // mode are interpreted as motions and swallowed (flaky "SEE" artifacts).
+  await expect(page.locator(".vim-mode")).toContainText(/insert/i);
+  await page.keyboard.insertText("SELECT 'first tab';");
 
   await page.locator("button.tab-add").click();
   await editor.click();
   await page.keyboard.press("i");
-  await page.keyboard.type("SELECT 'second tab';");
+  await expect(page.locator(".vim-mode")).toContainText(/insert/i);
+  await page.keyboard.insertText("SELECT 'second tab';");
   await expect(editor).toHaveValue(/second tab/);
 
   // Back to the first tab — its buffer must survive the round trip.

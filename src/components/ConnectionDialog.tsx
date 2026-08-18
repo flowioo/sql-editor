@@ -37,6 +37,9 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
   const [alias, setAlias] = useState("");
   const [activeTab, setActiveTab] = useState<"sqlite" | "postgresql" | "mysql" | "redis">("postgresql");
   const [testing, setTesting] = useState(false);
+  // Covers the whole save→keychain→connect sequence. Without it, a slow DB
+  // connect (unreachable host = ~30s sqlx timeout) looks like a dead button.
+  const [connecting, setConnecting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [savedList, setSavedList] = useState<SavedConnection[]>(loadSavedConnections);
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -151,6 +154,8 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
   }, [buildConfig]);
 
   const doConnectAndSave = useCallback(async (config: ConnectionConfig, name?: string, existingId?: string) => {
+    if (connecting) return;
+    setConnecting(true);
     const displayName = name || alias || makeDefaultName(config);
     // New connections get a random id so saving two configs for the same
     // database (e.g. different credentials / aliases) no longer collide.
@@ -166,10 +171,12 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
       // look at after the test passed, so the dialog appeared to do nothing.
       toast.error("保存连接失败（密码无法写入系统密钥链）", String(e));
       return;
+    } finally {
+      setConnecting(false);
     }
     setSavedList(loadSavedConnections());
     onConnect(config);
-  }, [alias, onConnect, toast]);
+  }, [alias, onConnect, toast, connecting]);
 
   const handleFormConnect = useCallback(() => {
     const config = buildConfig();
@@ -198,9 +205,17 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
   }, [onClose]);
 
   const handleSavedConnect = useCallback(async (conn: SavedConnection) => {
-    const config = await materializeConfig(conn);
-    onConnect(config);
-  }, [onConnect]);
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      // materializeConfig reads the keychain (now off the main thread on the
+      // Rust side); the connect itself happens in App after onConnect.
+      const config = await materializeConfig(conn);
+      onConnect(config);
+    } finally {
+      setConnecting(false);
+    }
+  }, [onConnect, connecting]);
 
   const handleDeleteSaved = useCallback(async (id: string, name: string) => {
     const ok = await confirm({
@@ -345,8 +360,8 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
                 </div>
                 {urlError && <div className="connection-error">{urlError}</div>}
                 <div className="connection-actions">
-                  <button className="btn-dialog btn-connect-dialog" onClick={handleUrlConnect} disabled={!urlInput.trim()}>
-                    连接并保存
+                  <button className="btn-dialog btn-connect-dialog" onClick={handleUrlConnect} disabled={!urlInput.trim() || connecting}>
+                    {connecting ? "连接中..." : "连接并保存"}
                   </button>
                 </div>
               </div>
@@ -452,11 +467,11 @@ export function ConnectionDialog({ editTarget: externalEditTarget, onClose, onCo
               {editTarget && (
                 <button className="btn-dialog" onClick={handleCancelEdit}>取消编辑</button>
               )}
-              <button className="btn-dialog btn-test" onClick={handleTest} disabled={testing}>
+              <button className="btn-dialog btn-test" onClick={handleTest} disabled={testing || connecting}>
                 {testing ? "测试中..." : "测试连接"}
               </button>
-              <button className="btn-dialog btn-connect-dialog" onClick={handleFormConnect}>
-                {editTarget ? "保存并连接" : "连接并保存"}
+              <button className="btn-dialog btn-connect-dialog" onClick={handleFormConnect} disabled={connecting}>
+                {connecting ? "连接中..." : editTarget ? "保存并连接" : "连接并保存"}
               </button>
             </div>
               </>

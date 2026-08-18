@@ -9,15 +9,42 @@ import { invoke } from "@tauri-apps/api/core";
  * `com.sqleditor.app` keychain service.
  */
 
+/** Reject with guidance when a keychain invoke has not settled in time.
+ *
+ *  Keychain ops normally finish in milliseconds, but macOS can raise a
+ *  hidden authorization prompt when the item was created by a previous dev
+ *  build (ad-hoc signatures change every rebuild). The invoke then pends
+ *  until the user notices the dialog — surfacing guidance beats an
+ *  indefinite "连接中...". */
+const KEYCHAIN_TIMEOUT_MS = 15_000;
+
+function withKeychainTimeout<T>(op: string, p: Promise<T>): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `${op}系统密钥链超时（15 秒）。可能有一个 macOS 密钥串授权弹窗在等你确认——` +
+                "请查看是否有被遮挡的系统对话框（可尝试移动应用窗口），输入登录密码并选择「始终允许」。",
+            ),
+          ),
+        KEYCHAIN_TIMEOUT_MS,
+      ),
+    ),
+  ]);
+}
+
 /** Persist a database password to the OS keychain under the connection id. */
 export async function storePassword(id: string, password: string): Promise<void> {
-  await invoke("store_password", { id, password });
+  await withKeychainTimeout("写入", invoke("store_password", { id, password }));
 }
 
 /** Load a password from the OS keychain. Returns null if none stored
  *  (e.g. SQLite connections, or a pre-migration legacy connection). */
 export async function loadPassword(id: string): Promise<string | null> {
-  return invoke<string | null>("load_password", { id });
+  return withKeychainTimeout("读取", invoke<string | null>("load_password", { id }));
 }
 
 /** Remove a password from the OS keychain. Silently succeeds if absent. */

@@ -64,37 +64,39 @@ export function loadSavedConnections(): SavedConnection[] {
       changed = true;
       return { ...c, config };
     });
-    if (changed) writeSavedConnections(migrated);
+    if (changed) writeSavedConnections(migrated, /* silent */ true);
     return migrated;
   } catch {
     return [];
   }
 }
 
-function writeSavedConnections(list: SavedConnection[]): void {
+function writeSavedConnections(list: SavedConnection[], silent = false): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  notify();
-}
-
-/** Rebuild `url` without its embedded password section; returns undefined
- *  when the URL cannot be parsed (we then drop it rather than risk keeping
- *  credentials). Used before anything reaches localStorage. */
-function stripUrlPassword(url: string): string | undefined {
-  try {
-    const u = new URL(url);
-    u.password = "";
-    return u.toString();
-  } catch {
-    return undefined;
-  }
+  // Silent writes are pure normalizations (e.g. the legacy-URL migration):
+  // the logical data is unchanged, so listeners must not re-read — a notify
+  // here fires listener setStates while a component may still be rendering
+  // ("Cannot update a component while rendering a different component"),
+  // and paired with a load that always "changes" it recursed forever.
+  if (!silent) notify();
 }
 
 /** Return a copy of `config` whose `url` carries no embedded password.
- *  Objects are returned unchanged when there is nothing to strip (SQLite
- *  and Redis configs have no `url` field at all). */
+ *  Returns the SAME reference when the url is already password-free —
+ *  loadSavedConnections relies on reference equality as its change signal,
+ *  so an unconditional clone here would make every load "change" and
+ *  re-trigger the write→notify cycle. Unparseable URLs are dropped (we
+ *  cannot strip what we cannot parse). */
 function withStrippedUrl(config: ConnectionConfig): ConnectionConfig {
   if (!("url" in config) || !config.url) return config;
-  return { ...config, url: stripUrlPassword(config.url) };
+  try {
+    const u = new URL(config.url);
+    if (u.password === "") return config;
+    u.password = "";
+    return { ...config, url: u.toString() };
+  } catch {
+    return { ...config, url: undefined };
+  }
 }
 
 /** Return a copy of `config` with all credentials blanked — both the

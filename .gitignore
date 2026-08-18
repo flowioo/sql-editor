@@ -28,3 +28,5 @@ coverage/
 # IDE
 .idea/
 .vscode/
+# 旧图标备份（本地保留，不入库）
+src-tauri/icons.bak/

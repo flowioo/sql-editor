@@ -10,7 +10,7 @@ import {
 } from "../lib/savedConnections";
 import { DB_TYPE_ICON_LABEL } from "../lib/tokens";
 import { SchemaTree } from "./SchemaTree";
-import { Tooltip } from "./ui";
+import { Tooltip, DropdownMenu } from "./ui";
 import { useConfirm } from "../hooks/useConfirm";
 import "../styles/sidebar.css";
 
@@ -148,51 +148,64 @@ export const Sidebar = memo(function Sidebar({
                       </span>
                     </div>
                     <div className="conn-actions">
-                      <Tooltip content="连接">
-                        <button
-                          className="conn-action"
-                          onClick={() => onConnect(conn)}
-                        >
-                          连接
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="编辑连接参数">
-                        <button
-                          className="conn-action"
-                          onClick={() => onEditConnection(conn)}
-                        >
-                          编辑
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="复制为新连接">
-                        <button
-                          className="conn-action"
-                          onClick={async () => {
-                            // duplicateSavedConnection copies the keychain
-                            // password under a new id; the subscribe listener
-                            // above refreshes the list automatically.
-                            await duplicateSavedConnection(conn.id);
-                          }}
-                        >
-                          复制
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="删除">
-                        <button
-                          className="conn-action danger"
-                          onClick={async () => {
-                            const ok = await confirm({
-                              title: "删除连接",
-                              description: `确定要删除连接「${conn.name}」?`,
-                              confirmLabel: "删除",
-                              variant: "danger",
-                            });
-                            if (ok) await removeSavedConnection(conn.id);
-                          }}
-                        >
-                          删除
-                        </button>
-                      </Tooltip>
+                      <DropdownMenu.Root>
+                        <Tooltip content="连接操作">
+                          <DropdownMenu.Trigger asChild>
+                            <button
+                              className="conn-action conn-action-menu"
+                              aria-label={`连接操作：${conn.name}`}
+                            >
+                              ⋯
+                            </button>
+                          </DropdownMenu.Trigger>
+                        </Tooltip>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content
+                            className="ui-dropdown-content"
+                            sideOffset={4}
+                            align="end"
+                          >
+                            <DropdownMenu.Item
+                              className="ui-dropdown-item"
+                              onSelect={() => onConnect(conn)}
+                            >
+                              连接
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              className="ui-dropdown-item"
+                              onSelect={() => onEditConnection(conn)}
+                            >
+                              编辑
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              className="ui-dropdown-item"
+                              onSelect={async () => {
+                                // duplicateSavedConnection copies the keychain
+                                // password under a new id; the subscribe listener
+                                // above refreshes the list automatically.
+                                await duplicateSavedConnection(conn.id);
+                              }}
+                            >
+                              复制
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Separator className="ui-dropdown-separator" />
+                            <DropdownMenu.Item
+                              className="ui-dropdown-item danger"
+                              onSelect={async () => {
+                                const ok = await confirm({
+                                  title: "删除连接",
+                                  description: `确定要删除连接「${conn.name}」?`,
+                                  confirmLabel: "删除",
+                                  variant: "danger",
+                                });
+                                if (ok) await removeSavedConnection(conn.id);
+                              }}
+                            >
+                              删除
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     </div>
                   </div>
                 );

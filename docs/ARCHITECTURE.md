@@ -26,7 +26,7 @@ pub enum Driver {
 
 `execute_multi_query` 在 `mod.rs` 层用 `split_sql` 切分后逐条调用各驱动的 `execute_single`，把结果聚合成 `MultiQueryResult`。`StatementResult`/`QueryResult` 都序列化成 `Vec<Vec<Option<String>>>` 传给前端。
 
-> **Roadmap：** 当前 enum 分发每新增一种数据库要改 enum + 4 处 match，违反开闭原则。计划重构为 `#[async_trait] trait Driver`，把 `execute_multi_query`/`split_sql` 上提为默认实现，驱动只实现 `execute_single` + `get_schema` 两个原语 + 一个注册式工厂。
+> **已实现** —— `DriverGateway` trait 定义在 `application/ports.rs`，4 个驱动（`sqlite` / `postgres` / `mysql` / `redis`）均已 `impl DriverGateway`，仅提供 `execute_single` + `get_schema` 两个原语；`execute_multi_query` 与 `split_sql` 在 trait 默认实现层。新增驱动只需实现 trait + 工厂注册。
 
 ### 凭证存储
 

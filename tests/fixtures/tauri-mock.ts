@@ -25,6 +25,12 @@ export interface TauriMockOptions {
   readonly connected?: boolean;
   /** Pre-seed editor tab content. Defaults to the showcase join query. */
   readonly tabContent?: string;
+  /**
+   * Override the seeded saved connection. Defaults to the SQLite demo so the
+   * existing specs (schema tree, autocomplete, etc.) keep working untouched.
+   * Pass `DEMO_REDIS_CONNECTION` to exercise the Redis dialect path.
+   */
+  readonly connection?: unknown;
 }
 
 const DEFAULT_TAB_CONTENT = `-- 演示查询：每个用户的订单汇总
@@ -43,7 +49,6 @@ interface MockPayload {
   readonly schema: unknown;
   readonly multiResult: unknown;
   readonly singleResult: unknown;
-  readonly connectionName: string;
   readonly defaultTabContent: string;
 }
 
@@ -55,7 +60,6 @@ export async function installTauriMock(
     schema: DEMO_SCHEMA,
     multiResult: DEMO_MULTI_RESULT,
     singleResult: { results: [DEMO_JOIN_RESULT], total_duration_ms: 8 },
-    connectionName: DEMO_CONNECTION.name,
     // Inlined as a string because addInitScript serialises the function and
     // re-runs it in the browser context — module-level constants from the
     // outer file are not visible there.
@@ -65,7 +69,14 @@ export async function installTauriMock(
   await page.addInitScript(
     ({ data, seed }: { data: MockPayload; seed: TauriMockOptions & { conn: unknown } }) => {
       const responses: Record<string, (args?: Record<string, unknown>) => unknown> = {
-        connect: () => data.connectionName,
+        // Reflect whatever connection the test seeded — display name comes
+        // from the connect() arg, not from a hardcoded constant, so the
+        // Redis spec exercises the Redis connection without falling back
+        // to the SQLite display name.
+        connect: (args) => {
+          const cfg = args?.config as { name?: string } | undefined;
+          return cfg?.name ?? seed.conn?.name ?? null;
+        },
         disconnect: () => null,
         get_cached_schema: () => data.schema,
         refresh_schema: () => data.schema,
@@ -90,11 +101,6 @@ export async function installTauriMock(
         read_query_file: () => data.defaultTabContent,
         save_query_file: () => "/tmp/demo/queries/shop.db/untitled.sql",
         delete_query_file: () => null,
-        scan_codebase: () => ({
-          models_found: 4,
-          columns_matched: 19,
-          columns_unmatched: 3,
-        }),
         // Column descriptions are fetched per-table on connect. The real
         // backend scans the project for matching field names; here we just
         // pretend the inference succeeded so the UI is quiet.
@@ -152,7 +158,7 @@ export async function installTauriMock(
         );
       }
     },
-    { data: payload, seed: { ...options, conn: DEMO_CONNECTION } },
+    { data: payload, seed: { ...options, conn: options.connection ?? DEMO_CONNECTION } },
   );
 }
 
@@ -160,6 +166,28 @@ export async function installTauriMock(
 export async function waitForAppReady(page: Page): Promise<void> {
   await page.waitForSelector(".app", { state: "visible" });
   await page.waitForSelector(".sql-textarea", { state: "visible" });
+}
+
+/**
+ * Drive the saved-connection → kebab → 连接 flow so the schema tree mounts.
+ *
+ * `installTauriMock({ connected: true })` only seeds localStorage; the app
+ * still starts in `disconnected` state (see `useConnection`), so schema
+ * tree / autocomplete / result grid won't appear until the user clicks
+ * through the connect flow. Mirrors what screenshots.spec.ts does.
+ *
+ * Returns to the schema tab afterwards because the connect flow leaves
+ * the sidebar on the connections tab — most specs want the schema tree
+ * visible, not the saved-connection list.
+ */
+export async function connectToDemo(page: Page): Promise<void> {
+  await page.locator(".sidebar-tab", { hasText: "连接" }).first().click();
+  await page.waitForSelector(".conn-item", { state: "visible" });
+  await page.locator(".conn-action-menu").first().click({ force: true });
+  await page.locator(".ui-dropdown-item", { hasText: "连接" }).first().click();
+  await page.waitForSelector(".schema-tree, .sql-highlight", { state: "visible" });
+  await page.locator(".sidebar-tab", { hasText: "数据库" }).first().click();
+  await page.waitForSelector(".schema-table-header", { state: "visible" });
 }
 
 /**

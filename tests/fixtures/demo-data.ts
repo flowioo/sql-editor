@@ -126,3 +126,11 @@ export const DEMO_CONNECTION = {
   name: "shop.db (demo)",
   config: { type: "sqlite", path: "/Users/you/projects/shop/shop.db" },
 } as const;
+
+/** Redis demo connection — exercises the redis dialect path in
+ *  SQLEditor / ResultGrid / autocomplete. */
+export const DEMO_REDIS_CONNECTION = {
+  id: "demo-redis",
+  name: "localhost:6379 (demo)",
+  config: { type: "redis", host: "localhost", port: 6379 },
+} as const;

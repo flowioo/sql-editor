@@ -22,15 +22,10 @@
 
 | | |
 |:---:|:---:|
-| ![连接对话框](./docs/images/03-connection-dialog.png) | ![AI 面板](./docs/images/05-ai-panel.png) |
-| 多类型连接表单 | AI 集成（待实现，见 Roadmap） |
+| ![连接对话框](./docs/images/03-connection-dialog.png) | ![语法高亮](./docs/images/highlight.gif) |
+| 多类型连接表单 | 关键字 / 字符串 / 数字逐 token 实时着色 |
 
-### 语法高亮
-
-![语法高亮动效](./docs/images/highlight.gif)
-
-> 上图：键入 SQL 时关键字 / 字符串 / 数字 / 标识符逐 token 实时着色。
-> 由 `tests/gif.spec.ts` 用 Playwright + ffmpeg 生成，跑 `GIF=1 pnpm exec playwright test tests/gif.spec.ts` 可重拍。
+> 语法高亮动效由 `tests/gif.spec.ts` 用 Playwright + ffmpeg 生成，跑 `GIF=1 pnpm exec playwright test tests/gif.spec.ts` 可重拍。
 
 ## 平台架构
 

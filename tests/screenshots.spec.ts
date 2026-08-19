@@ -95,52 +95,7 @@ const SHOTS: ReadonlyArray<{ name: string; setup: (page: Page) => Promise<void> 
       await page.waitForTimeout(150);
     },
   },
-  {
-    name: "05-ai-panel.png",
-    setup: async (page) => {
-      // Pre-seed a remote endpoint so the privacy bar shows its warn state.
-      await page.addInitScript(() => {
-        localStorage.setItem(
-          "sqleditor.settings",
-          JSON.stringify({
-            vimEnabled: true,
-            aiEndpoint: "https://api.openai.example/v1/chat/completions",
-            aiSendSchema: true,
-            aiApprovedEndpoint: null,
-            resultView: "table",
-          }),
-        );
-      });
-      await waitForAppReady(page);
-      await connectToDemo(page);
-      // AIPanel is hidden behind a toolbar toggle. Open it before asserting.
-      await page.locator(".btn-secondary", { hasText: /AI/ }).first().click({ force: true });
-      await page.waitForSelector(".ai-panel", { state: "visible", timeout: 15000 });
-      // Flip the endpoint to a remote URL through the UI — clicking the
-      // privacy toggle's checkbox and using a custom flow would be fragile,
-      // so we use the same code path as a real user (typing into a future
-      // settings dialog). For the screenshot we just rewrite localStorage
-      // and reload — the privacy bar will re-render with the remote badge.
-      await page.evaluate(() => {
-        localStorage.setItem(
-          "sqleditor.settings",
-          JSON.stringify({
-            vimEnabled: true,
-            aiEndpoint: "https://api.openai.example/v1/chat/completions",
-            aiSendSchema: true,
-            aiApprovedEndpoint: null,
-            resultView: "table",
-          }),
-        );
-      });
-      await page.reload();
-      await waitForAppReady(page);
-      // Re-open AI panel after reload (toolbar state isn't persisted).
-      await page.locator(".btn-secondary", { hasText: /AI/ }).first().click({ force: true });
-      await page.waitForSelector(".ai-endpoint-badge.remote", { state: "visible", timeout: 15000 });
-    },
-  },
-];
+  ];
 
 test.describe.configure({ mode: "serial" });
 

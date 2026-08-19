@@ -1,7 +1,6 @@
 pub mod cache;
 pub mod introspect;
 pub mod persist;
-pub mod scanner;
 
 use serde::{Serialize, Deserialize};
 
@@ -35,4 +34,15 @@ pub struct DatabaseSchema {
     pub database_name: String,
     pub tables: Vec<Table>,
     pub captured_at: String,
+}
+
+/// A column description inferred from a codebase scan. Used by the
+/// `get_column_descriptions` command to surface hints in the schema tree.
+#[derive(Serialize, Clone)]
+pub struct ColumnDescription {
+    pub table_name: String,
+    pub column_name: String,
+    pub description: String,
+    pub source: String,
+    pub file_path: String,
 }

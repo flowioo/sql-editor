@@ -1,7 +1,7 @@
 use tauri::State;
 use crate::AppState;
 use crate::schema::DatabaseSchema;
-use crate::schema::scanner::{self, ColumnDescription, ScanResult};
+use crate::schema::ColumnDescription;
 use crate::schema::persist;
 
 #[tauri::command]
@@ -137,59 +137,6 @@ fn schema_changed(cached: &DatabaseSchema, remote: &DatabaseSchema) -> bool {
     }
 
     false
-}
-
-#[tauri::command]
-pub async fn scan_codebase(
-    dir_path: String,
-    state: State<'_, AppState>,
-) -> Result<ScanResult, String> {
-    // Single-lock (key, schema) snapshot — keeps us consistent against a
-    // concurrent connect.
-    let (key, schema) = {
-        let inner = state.inner.lock().map_err(|e| e.to_string())?;
-        let key = inner
-            .current_connection_key
-            .clone()
-            .ok_or("未连接到数据库".to_string())?;
-        let schema = inner
-            .schema_cache
-            .get(&key)
-            .cloned()
-            .ok_or("请先刷新数据库结构".to_string())?;
-        (key, schema)
-    };
-
-    let table_names: Vec<String> = schema.tables.iter().map(|t| t.name.clone()).collect();
-
-    // `scan_directory` walks the entire tree reading every Go/TS/Prisma
-    // file — this is a long blocking call, must run on a blocking thread.
-    let mut result = tokio::task::spawn_blocking({
-        let table_names = table_names.clone();
-        move || scanner::scan_directory(&dir_path, &table_names)
-    })
-    .await
-    .map_err(|e| format!("后台任务执行失败: {}", e))??;
-
-    let cache_path = state.cache_db_path.clone();
-    let key_for_disk = key.clone();
-    let db_name = schema.database_name.clone();
-    let descriptions = result.descriptions.clone();
-    tokio::task::spawn_blocking(move || {
-        persist::save_column_descriptions(&cache_path, &key_for_disk, &db_name, &descriptions)
-    })
-    .await
-    .map_err(|e| format!("后台任务执行失败: {}", e))??;
-
-    let cache_path = state.cache_db_path.clone();
-    let key_for_disk = key.clone();
-    result.descriptions = tokio::task::spawn_blocking(move || {
-        persist::load_all_column_descriptions(&cache_path, &key_for_disk)
-    })
-    .await
-    .map_err(|e| format!("后台任务执行失败: {}", e))??;
-
-    Ok(result)
 }
 
 #[tauri::command]

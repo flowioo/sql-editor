@@ -1,0 +1,39 @@
+# Dependabot configuration.
+#
+# Two ecosystems — root npm + Rust workspace — so renovate-style updates
+# stay out of the contributor's `pnpm install` / `cargo update` workflow.
+# Weekly cadence + grouped PRs keeps the review surface bounded.
+
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      prod:
+        dependency-type: "production"
+      dev:
+        dependency-type: "development"
+    labels:
+      - "dependencies"
+      - "npm"
+
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"

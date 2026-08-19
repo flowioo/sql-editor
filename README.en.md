@@ -137,6 +137,14 @@ Please read this section — it determines how your data is handled.
 
 ## Install & Build
 
+### Clone
+
+```bash
+# --depth=1 skips the full git history to keep the checkout small
+git clone --depth=1 https://github.com/flowioo/sql-editor.git
+cd sql-editor
+```
+
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) ≥ 20 + [pnpm](https://pnpm.io/)

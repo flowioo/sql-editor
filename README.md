@@ -137,6 +137,14 @@ flowchart LR
 
 ## 安装与构建
 
+### 克隆
+
+```bash
+# 用 --depth=1 只下载最新一次提交，避免下载完整 git 历史
+git clone --depth=1 https://github.com/flowioo/sql-editor.git
+cd sql-editor
+```
+
 ### 前置要求
 
 - [Node.js](https://nodejs.org/) ≥ 20 + [pnpm](https://pnpm.io/)

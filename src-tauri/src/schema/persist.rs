@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params};
 use crate::schema::DatabaseSchema;
-use crate::schema::scanner::ColumnDescription;
+use crate::schema::ColumnDescription;
 
 pub fn ensure_cache_db(cache_db_path: &str) -> Result<(), String> {
     let conn = Connection::open(cache_db_path)

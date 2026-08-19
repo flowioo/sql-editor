@@ -17,7 +17,6 @@ import { useConnection } from "./hooks/useConnection";
 import { useSchema } from "./hooks/useSchema";
 import { useQuery } from "./hooks/useQuery";
 import { useQueryHistory } from "./hooks/useQueryHistory";
-import { useCodebaseScan } from "./hooks/useCodebaseScan";
 import { useColumnDescriptions } from "./hooks/useColumnDescriptions";
 import { useSettings } from "./hooks/useSettings";
 import { connIdFromConfig, dialectOfConnection } from "./lib/connection-utils";
@@ -76,12 +75,10 @@ function AppInner() {
 
   const {
     schema,
-    loading: schemaLoading,
     error: schemaError,
     lastRefreshedAt,
     offline,
     loadFromCache,
-    refresh: refreshSchema,
     diffOnConnect,
   } = useSchema();
   const {
@@ -100,7 +97,6 @@ function AppInner() {
     deleteFile,
     saveCurrentAsFile,
   } = useQueryHistory(currentConfig ? connIdFromConfig(currentConfig) : null);
-  const { scanning, scanResult, scanCodebase } = useCodebaseScan();
   const { descriptions, states: descStates, loadDescriptions } = useColumnDescriptions();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -369,14 +365,9 @@ function AppInner() {
           connectionStatus={connStatus}
           connectionName={displayName}
           queryLoading={queryLoading}
-          schemaLoading={schemaLoading}
-          scanning={scanning}
-          scanResult={scanResult}
           onConnect={() => setShowConnectionDialog(true)}
           onDisconnect={doDisconnect}
           onRun={handleRun}
-          onRefreshSchema={refreshSchema}
-          onScanCodebase={scanCodebase}
           onToggleAI={() => setShowAI(!showAI)}
           onToggleVim={() => updateSettings("vimEnabled", !vimEnabled)}
           showAI={showAI}

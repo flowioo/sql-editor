@@ -1,6 +1,9 @@
-# sql-editor — 本地优先的数据查询平台
+# sql-editor — 核心稳定可扩展的数据查询工具
 
-> 一款面向开发者的本地优先（local-first）数据查询平台，基于 Tauri v2 构建。不止是 SQL 编辑器：**可扩展的查询引擎**、**可定制的结果组件**、**CRUD SQL 自动生成**。目前支持 PostgreSQL / MySQL / SQLite / Redis。
+中文 | [English](./README.en.md)
+
+> 一款核心稳定、可扩展的本地优先数据查询工具，专注**管理你的数据源**。基于 Tauri v2 + Rust 构建，资源占用远低于 Electron 类方案。
+> 三条核心支柱：**可扩展的查询引擎**、**数据源管理**、**无缝对接 Agent**。目前支持 PostgreSQL / MySQL / SQLite / Redis。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg)](./.github/workflows/ci.yml)
@@ -40,19 +43,24 @@
 - 已内置：SQLite（rusqlite）、PostgreSQL、MySQL（sqlx）、Redis
 - **Driver trait 化已完成**：统一接口 `DriverGateway`（`execute_single` / `get_schema`），多语句编排 `execute_multi_query` 共享；新增驱动只需实现 trait。
 
-### 2. 页面组件可定制
+### 2. 数据源管理
 
-结果展示与数据操作以组件方式组织，可按数据形态定制呈现：
+把"连接 + 凭据 + 结构 + 查询历史"视为一等公民，所有数据按连接隔离：
 
-- 已内置：虚拟滚动结果网格、多结果 Tab、单击复制、单元格直接编辑
-- Roadmap：结果渲染器配置（JSON / 表格 / 图表）、组件注册机制
+- 连接：本地列表 + 凭据存 OS 密钥链（macOS Keychain / Windows Credential Manager / Linux libsecret）
+- Schema：本地 SQLite 缓存 + 代码库列描述推断，离线浏览
+- 查询历史：按连接隔离的 `.sql` 文件，自动保存到 `app_data_dir/queries/<连接>/`
+- 结果操作：单元格直接编辑 → 按主键自动生成 `UPDATE`
+- 所有 UI 操作不离开本地，零遥测
 
-### 3. CRUD SQL 自动生成
+### 3. 无缝对接 Agent
 
-数据变更操作由平台生成 SQL，避免手写易错语句：
+把查询工具变成 Agent 友好的子进程 / HTTP 端点，便于 Claude Code / Codex / pi 等 Agent 调用：
 
-- 已内置：双击单元格编辑值 → 按主键自动生成 `UPDATE`
-- Roadmap：行级 `INSERT` / `DELETE` 生成、变更预览确认
+- **本地 shell 调用**（首选）：把 sql-editor 当成命令调用，stdin 投 SQL / 参数，stdout 取结构化结果
+- **HTTP 端点**（可选）：暴露本地服务端口，Agent 远程发起查询
+- **结构化输出**：JSON / TSV / Markdown 表格可选，避免无意义转义
+- **Agent 视角设计**：错误信息针对 LLM 优化（带类型、列、行号），让 Agent 能自我修正
 
 ## 系统架构图
 
@@ -187,6 +195,18 @@ src-tauri/src/           # 后端（Rust）
 - [ ] 快捷键配置层（数据驱动 key→action 映射）
 - [ ] 设置中心（主题、字体统一持久化）
 - [ ] 明暗主题切换（token 已就绪，待加 `[data-theme]` 作用域）
+
+## 为什么不用 VSCode / 为什么自己造
+
+| 维度 | VSCode + SQL 插件 | 本项目 |
+|---|---|---|
+| 资源占用 | Electron，~300-500 MB 内存常驻 | Tauri v2 + Rust 后端，~30-80 MB |
+| 多数据库 | 各自独立的扩展，体验割裂 | 统一 `DriverGateway` trait，UI / 补全 / 结果网格代码共用 |
+| 查询专用 UI | 通用编辑器 + 插件式补全 | 数据库优先：侧栏连接 + 结构树 + 结果网格 + 单元格编辑 |
+| Agent 友好 | 没有标准化接口 | shell 调用 + 结构化输出，Agent 可直接调用 |
+| 凭据安全 | 写在 settings.json 或依赖扩展 | OS 密钥链，URL 密码自动剥离，零 localStorage |
+
+主要论点是：**VSCode 是通用编辑器，强行塞数据库查询**。我们要的是**核心稳定的数据查询工具**，Tauri + Rust 给到 `30 MB` 内存 + 类原生速度，加 `DriverGateway` trait 化后可扩展性不输插件生态。
 
 ## 开发指南
 

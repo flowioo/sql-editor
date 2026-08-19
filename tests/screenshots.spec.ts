@@ -25,9 +25,11 @@ async function connectToDemo(page: Page): Promise<void> {
   // "连接" buttons are in the DOM.
   await page.locator(".sidebar-tab", { hasText: "连接" }).first().click();
   await page.waitForSelector(".conn-item", { state: "visible" });
-  // `force` because the button is wrapped in a Radix Tooltip whose portal
-  // intercepts the synthetic click for a frame after hover.
-  await page.locator(".conn-action", { hasText: "连接" }).first().click({ force: true });
+  // Open the kebab menu and pick "连接" — the old four-button layout was
+  // collapsed into a single ⋯ trigger, so the dropdown item is the entry
+  // point now.
+  await page.locator(".conn-action-menu").first().click({ force: true });
+  await page.locator(".ui-dropdown-item", { hasText: "连接" }).first().click();
   await page.waitForSelector(".schema-tree, .sql-highlight", { state: "visible" });
 }
 

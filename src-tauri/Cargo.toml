@@ -1,6 +1,6 @@
 [package]
 name = "sql-editor"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 license = "MIT"
 description = "面向开发者的本地优先 SQL 查询编辑器后端（Tauri v2）"

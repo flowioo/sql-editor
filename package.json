@@ -1,7 +1,7 @@
 {
   "name": "sql-editor",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1",
+  "private": false,
   "type": "module",
   "license": "MIT",
   "description": "面向开发者的本地优先 SQL 查询编辑器（Tauri v2 + 自研 SQL 编辑器）",

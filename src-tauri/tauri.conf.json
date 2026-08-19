@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicepkg/tauri-v2/main/tooling/cli/schema.json",
   "productName": "SQL 查询编辑器",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "identifier": "com.sqleditor.app",
   "build": {
     "beforeDevCommand": "pnpm run dev",
